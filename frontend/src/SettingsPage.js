@@ -115,6 +115,7 @@ function ProfileDetails() {
     setMsg("");
     setMsgType("");
 
+    let saved = false;
     try {
       const token = authUser?.token || localStorage.getItem("token");
 
@@ -129,11 +130,15 @@ function ProfileDetails() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
+      saved = true;
       showMessage("Saved successfully.", "success");
     } catch (err) {
       showMessage(err.response?.data?.detail || "Save failed.", "error");
     } finally {
       setSaving(false);
+      if (saved) {
+        navigate("/profile"); // redirect to UserProfile
+      }
     }
   };
 

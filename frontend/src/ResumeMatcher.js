@@ -141,8 +141,10 @@ const ResumeMatcher = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 to-purple-200 py-10">
       {/* Main container for the Resume Matcher */}
-      <div className="bg-white rounded-2xl shadow-2xl px-10 py-14 sm:px-20 sm:py-16 max-w-6xl w-full mb-40 transition-all duration-200"
-        style={{ minHeight: "500px" }} >
+      <div
+        className="bg-white rounded-2xl shadow-2xl px-10 py-14 sm:px-20 sm:py-16 max-w-6xl w-full mb-40 transition-all duration-200 relative"
+        style={{ minHeight: "500px" }}
+      >
         <h1 className="text-4xl font-bold text-center text-blue-600 mb-2">Resume Job Matching</h1>
         <h2 className="text-xl text-center text-gray-700 mb-8">AI-Powered Fit Analysis &amp; Q&amp;A</h2>
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -182,10 +184,17 @@ const ResumeMatcher = () => {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full py-4 px-4 bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold rounded-lg shadow transition"
+            className="w-full py-4 px-4 bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold rounded-lg shadow transition disabled:opacity-70 disabled:cursor-not-allowed"
             disabled={loading}
           >
-            {loading ? "Checking..." : "Check Match"}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="inline-block h-5 w-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                Checking...
+              </span>
+            ) : (
+              "Check Match"
+            )}
           </button>
         </form>
         {/* === Display Result Section === */}

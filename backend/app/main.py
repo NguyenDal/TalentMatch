@@ -191,6 +191,10 @@ def generate_profile_trends(profession, bio):
     profession = (profession or "").strip()
     bio = (bio or "").strip()
 
+    # If BOTH are missing => do not generate trends
+    if not profession and not bio:
+        return []
+
     system_prompt = (
         "You are a career and job-search assistant. "
         "Given a user's profession and short bio, suggest up to 10 highly relevant topics, "

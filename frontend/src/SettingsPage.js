@@ -5,30 +5,21 @@ import axios from "axios";
 import { BASE_URL } from "./api";
 import { useAuth } from "./AuthContext";
 
-// Dummy user info
-const mockUser = {
-  firstName: "John",
-  lastName: "Doe",
-  email: "emailis@private.com",
-  profession: "UI/UX Designer",
-  bio: "Open-Source designer @ UI Design Daily",
-  avatar: "https://randomuser.me/api/portraits/men/4.jpg",
-};
-
 function ProfileDetails() {
   const fileInput = useRef();
 
-  // --- NEW: real user state pulled from backend, fallback to mock ---
+  const navigate = useNavigate();
   const { user: authUser } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [avatar, setAvatar] = useState(mockUser.avatar);
-  const [firstName, setFirstName] = useState(mockUser.firstName);
-  const [lastName, setLastName] = useState(mockUser.lastName);
-  const [email, setEmail] = useState(mockUser.email);
-  const [profession, setProfession] = useState(mockUser.profession);
-  const [bio, setBio] = useState(mockUser.bio);
+  const [avatar, setAvatar] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [profession, setProfession] = useState("");
+  const [bio, setBio] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [msgType, setMsgType] = useState(""); // success | error
 
   useEffect(() => {
     const fetchMe = async () => {
@@ -39,21 +30,14 @@ function ProfileDetails() {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        // Backend returns: first_name, last_name, email, profile_image_url, profession, bio
         setAvatar(res.data.profile_image_url || "");
         setFirstName(res.data.first_name || "");
         setLastName(res.data.last_name || "");
         setEmail(res.data.email || "");
         setProfession(res.data.profession || "");
         setBio(res.data.bio || "");
-      } catch (_) {
-        // Fallback to mock if anything fails
-        setAvatar(mockUser.avatar);
-        setFirstName(mockUser.firstName);
-        setLastName(mockUser.lastName);
-        setEmail(mockUser.email);
-        setProfession(mockUser.profession);
-        setBio(mockUser.bio);
+      } catch {
+        // leave fields empty if API fails
       } finally {
         setLoading(false);
       }
@@ -61,14 +45,21 @@ function ProfileDetails() {
     fetchMe();
   }, [authUser]);
 
+  const showMessage = (text, type = "success") => {
+    setMsg(text);
+    setMsgType(type);
+    setTimeout(() => {
+      setMsg("");
+      setMsgType("");
+    }, 3000); // auto-hide after 3s
+  };
+
   const handleImageUploadClick = () => fileInput.current?.click();
 
-  // --- Upload image to existing /upload-profile-image/ endpoint ---
   const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Show instant preview
     const preview = URL.createObjectURL(file);
     const prevAvatar = avatar;
     setAvatar(preview);
@@ -85,16 +76,14 @@ function ProfileDetails() {
       });
       if (res.data?.profile_image_url) {
         setAvatar(res.data.profile_image_url);
-        setMsg("Profile image updated.");
+        showMessage("Profile image updated.", "success");
       } else {
-        // rollback if backend didn't return a URL
         setAvatar(prevAvatar);
-        setMsg("Upload failed. Please try again.");
+        showMessage("Upload failed. Please try again.", "error");
       }
     } catch (err) {
-      // rollback preview on error
       setAvatar(prevAvatar);
-      setMsg(err.response?.data?.detail || "Upload failed.");
+      showMessage(err.response?.data?.detail || "Upload failed.", "error");
     } finally {
       try {
         URL.revokeObjectURL(preview);
@@ -102,10 +91,9 @@ function ProfileDetails() {
     }
   };
 
-  // --- Delete image: clears locally and persists via backend ---
   const handleDeleteImage = async () => {
     const prevAvatar = avatar;
-    setAvatar(""); // immediately reflect deletion in UI
+    setAvatar("");
 
     try {
       const token = authUser?.token || localStorage.getItem("token");
@@ -114,38 +102,36 @@ function ProfileDetails() {
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setMsg("Profile image removed.");
+      showMessage("Profile image removed.", "success");
     } catch {
-      // If backend route fails for any reason, roll back UI
       setAvatar(prevAvatar);
-      setMsg("Failed to remove image.");
+      showMessage("Failed to remove image.", "error");
     }
   };
 
-  // Save Changes
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     setMsg("");
+    setMsgType("");
 
     try {
       const token = authUser?.token || localStorage.getItem("token");
 
-      // IMPORTANT: send FormData so FastAPI's Form(...) fields receive values
       const form = new FormData();
       form.append("first_name", firstName);
       form.append("last_name", lastName);
-      form.append("email", email);         // include only if your API allows editing email
+      form.append("email", email);
       form.append("profession", profession);
       form.append("bio", bio);
 
       await axios.patch(`${BASE_URL}/profile/update/`, form, {
-        headers: { Authorization: `Bearer ${token}` }, // don't set Content-Type manually
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      setMsg("Saved.");
+      showMessage("Saved successfully.", "success");
     } catch (err) {
-      setMsg(err.response?.data?.detail || "Save failed.");
+      showMessage(err.response?.data?.detail || "Save failed.", "error");
     } finally {
       setSaving(false);
     }
@@ -156,93 +142,106 @@ function ProfileDetails() {
   }
 
   return (
-    <form className="max-w-3xl grid grid-cols-2 gap-8" onSubmit={handleSubmit}>
-      <div className="col-span-2 flex items-center gap-8 mb-6">
-        <img
-          src={avatar || "https://via.placeholder.com/112?text=No+Avatar"}
-          alt="Profile"
-          className="w-28 h-28 rounded-full border-4 border-white shadow object-cover"
-        />
-        <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            className="bg-gray-900 text-white px-6 py-2 rounded-md font-medium hover:bg-gray-700 transition"
-            onClick={handleImageUploadClick}
-          >
-            Change picture
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleImageChange}
-          />
-          <button
-            type="button"
-            className="border border-gray-400 text-gray-700 px-6 py-2 rounded-md font-medium hover:bg-gray-100 transition"
-            onClick={handleDeleteImage}
-          >
-            Delete picture
-          </button>
-          {msg && <span className="text-sm text-gray-600">{msg}</span>}
-        </div>
-      </div>
-      <div className="col-span-1">
-        <label className="block text-gray-700 font-medium mb-1">First name</label>
-        <input
-          type="text"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
-        />
-      </div>
-      <div className="col-span-1">
-        <label className="block text-gray-700 font-medium mb-1">Last name</label>
-        <input
-          type="text"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
-        />
-      </div>
-      <div className="col-span-2">
-        <label className="block text-gray-700 font-medium mb-1">Email</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
-        />
-      </div>
-      <div className="col-span-2">
-        <label className="block text-gray-700 font-medium mb-1">Profession</label>
-        <input
-          type="text"
-          value={profession}
-          onChange={(e) => setProfession(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
-        />
-      </div>
-      <div className="col-span-2">
-        <label className="block text-gray-700 font-medium mb-1">Bio</label>
-        <textarea
-          rows={3}
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
-        />
-      </div>
-      <div className="col-span-2 mt-6 flex justify-end">
-        <button
-          type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-md font-bold transition"
-          disabled={saving}
+    <div>
+      {msg && (
+        <div
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium transition-opacity duration-300 ${
+            msgType === "success"
+              ? "bg-green-100 text-green-700 border border-green-300"
+              : "bg-red-100 text-red-700 border border-red-300"
+          }`}
         >
-          {saving ? "Saving..." : "Save Changes"}
-        </button>
-      </div>
-    </form>
+          {msg}
+        </div>
+      )}
+
+      <form className="max-w-3xl grid grid-cols-2 gap-8" onSubmit={handleSubmit}>
+        <div className="col-span-2 flex items-center gap-8 mb-6">
+          <img
+            src={avatar || "https://via.placeholder.com/112?text=No+Avatar"}
+            alt="Profile"
+            className="w-28 h-28 rounded-full border-4 border-white shadow object-cover"
+          />
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              className="bg-gray-900 text-white px-6 py-2 rounded-md font-medium hover:bg-gray-700 transition"
+              onClick={handleImageUploadClick}
+            >
+              Change picture
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageChange}
+            />
+            <button
+              type="button"
+              className="border border-gray-400 text-gray-700 px-6 py-2 rounded-md font-medium hover:bg-gray-100 transition"
+              onClick={handleDeleteImage}
+            >
+              Delete picture
+            </button>
+          </div>
+        </div>
+        <div className="col-span-1">
+          <label className="block text-gray-700 font-medium mb-1">First name</label>
+          <input
+            type="text"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+          />
+        </div>
+        <div className="col-span-1">
+          <label className="block text-gray-700 font-medium mb-1">Last name</label>
+          <input
+            type="text"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-gray-700 font-medium mb-1">Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-gray-700 font-medium mb-1">Profession</label>
+          <input
+            type="text"
+            value={profession}
+            onChange={(e) => setProfession(e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-gray-700 font-medium mb-1">Bio</label>
+          <textarea
+            rows={3}
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+          />
+        </div>
+        <div className="col-span-2 mt-6 flex justify-end">
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-md font-bold transition"
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -256,8 +255,7 @@ function Security() {
   return <div className="max-w-3xl text-black">Security settings go here (2FA, etc).</div>;
 }
 
-export default function ProfileSetting() {
-  // Sidebar config
+export default function SettingsPage() {
   const sidebar = [
     { name: "Public profile", path: "/profile" },
     { name: "Account settings", path: "/profile/account" },
@@ -269,15 +267,12 @@ export default function ProfileSetting() {
 
   return (
     <div className="flex flex-col items-center justify-center w-full bg-gradient-to-br from-blue-100 to-purple-200 py-10 min-h-[90vh]">
-      {/* Main card */}
       <div className="w-full max-w-6xl mx-auto shadow-xl rounded-2xl bg-white flex"
         style={{ minHeight: "650px" }}
       >
-        {/* Sidebar */}
         <aside className="w-72 border-r border-gray-200 px-8 py-10 relative">
-          {/* Back arrow button */}
           <button
-            onClick={() => navigate("/profile")} // Change to your Profile page route
+            onClick={() => navigate("/profile")}
             className="absolute left-4 top-4 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-full shadow-lg p-2 transition flex items-center justify-center"
             style={{
               boxShadow: "0 4px 16px 0 rgba(0,0,0,0.07)",
@@ -306,7 +301,6 @@ export default function ProfileSetting() {
             ))}
           </nav>
         </aside>
-        {/* Main content */}
         <section className="flex-1 px-16 py-12 min-w-0 flex flex-col">
           <Routes>
             <Route path="/" element={<ProfileDetails />} />

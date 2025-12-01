@@ -8,7 +8,7 @@ import ResetPassword from "./ResetPassword";
 import RequestPasswordReset from "./RequestPasswordReset";
 import NavBar from "./NavBar";
 import PublicNavBar from "./PublicNavBar";
-import ProfileSetting from "./ProfileSetting";
+import SettingsPage from "./SettingsPage.js";
 import UserProfile from "./UserProfile";
 
 // Main authenticated content (with app nav bar)
@@ -66,7 +66,7 @@ const App = () => {
         <Route path="/profile/settings/*" element={
           <>
             <NavBar setMenu={() => { }} menu="profile" />
-            <ProfileSetting />
+            <SettingsPage />
           </>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -219,7 +219,7 @@ function ProfileDetails() {
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-gray-700 font-medium mb-1">Profession</label>
+          <label className="block text-gray-700 font-medium mb-1">Field of study</label>
           <input
             type="text"
             value={profession}
@@ -228,7 +228,7 @@ function ProfileDetails() {
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-gray-700 font-medium mb-1">Bio</label>
+          <label className="block text-gray-700 font-medium mb-1">Preferred job titles</label>
           <textarea
             rows={3}
             value={bio}

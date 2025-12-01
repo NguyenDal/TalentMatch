@@ -55,7 +55,7 @@ export default function ProfilePage() {
           avatar: res.data.profile_image_url,
           name: displayName,
           nickname: "@" + res.data.username,
-          stats: { posts: 289, followers: "Lorem", following: "45 Ipsum" }, // You can make this dynamic if you have endpoints
+          stats: { posts: 289, followers: "Lorem", following: "45 Ipsum" },
         });
       } catch (err) {
         setUser({
@@ -81,7 +81,8 @@ export default function ProfilePage() {
         const res = await axios.get(`${BASE_URL}/profile/trends/`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setTrends(res.data.trends || []);
+        const items = res.data.trends || [];
+        setTrends(items);
       } catch (err) {
         console.error("Failed to load trends", err);
         setTrends([]);
@@ -128,10 +129,13 @@ export default function ProfilePage() {
     );
   }
 
+  // Always show up to 10 trends
+  const visibleTrends = trends.slice(0, Math.min(10, trends.length || 10));
+
   return (
     <div className="flex flex-col items-center justify-center w-full bg-gradient-to-br from-blue-100 to-purple-200 py-10 min-h-[90vh]">
       <div className="min-h-screen bg-gray-50 flex justify-center px-2">
-        <div className="w-full max-w-8xl flex flex-col lg:flex-row gap-6 mt-4 mb-4">
+        <div className="w-full max-w-8xl flex flex-col lg:flex-row items-stretch gap-6 mt-4 mb-4">
           {/* Left/main content */}
           <main className="flex-1 bg-white rounded-2xl shadow-md overflow-hidden">
             {/* Banner */}
@@ -156,10 +160,12 @@ export default function ProfilePage() {
                       {user.stats.posts} <span className="text-gray-400 font-normal">Posts</span>
                     </span>
                     <span>
-                      {user.stats.followers} <span className="text-gray-400 font-normal">Followers</span>
+                      {user.stats.followers}{" "}
+                      <span className="text-gray-400 font-normal">Followers</span>
                     </span>
                     <span>
-                      {user.stats.following} <span className="text-gray-400 font-normal">Following</span>
+                      {user.stats.following}{" "}
+                      <span className="text-gray-400 font-normal">Following</span>
                     </span>
                   </div>
                 </div>
@@ -214,8 +220,9 @@ export default function ProfilePage() {
               ))}
             </div>
           </main>
+
           {/* Right Sidebar */}
-          <aside className="w-full lg:w-96 flex-shrink-0">
+          <aside className="w-full lg:w-96 flex-shrink-0 flex flex-col h-full">
             <div className="bg-white rounded-2xl shadow-md mb-6 p-5">
               <input
                 type="text"
@@ -247,14 +254,37 @@ export default function ProfilePage() {
                 <button className="text-blue-500 text-xs mt-2 ml-2">Show more...</button>
               </div>
             </div>
-            <div className="bg-white rounded-2xl shadow-md p-5">
+
+            {/* Trends card fills remaining height so its bottom lines up with the left content */}
+            <div className="bg-white rounded-2xl shadow-md p-5 flex-1 flex flex-col">
               <div className="font-bold mb-2 text-gray-800">Trends for you</div>
 
               {trendsLoading ? (
-                <div className="text-xs text-gray-400">Loading personalized trends...</div>
-              ) : trends && trends.length > 0 ? (
-                <ol className="text-gray-700 text-sm space-y-3">
-                  {trends.map((trend, idx) => (
+                // Skeleton loading shimmer - 10 items
+                <div className="space-y-3 flex-1">
+                  {[...Array(10)].map((_, idx) => (
+                    <div
+                      key={idx}
+                      className="relative overflow-hidden rounded-lg bg-gray-100/80"
+                    >
+                      <div className="animate-pulse p-3 flex flex-col gap-2 blur-[0.3px]">
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 w-20 rounded-full bg-gray-300" />
+                          <div className="h-3 w-10 rounded-full bg-gray-200" />
+                        </div>
+                        <div className="h-3 w-40 rounded-full bg-gray-300" />
+                        <div className="h-3 w-32 rounded-full bg-gray-200" />
+                      </div>
+                      <div className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/70 to-transparent animate-[shimmer_1.5s_infinite]" />
+                    </div>
+                  ))}
+                  <div className="text-[11px] text-gray-400 mt-1">
+                    Loading personalized trends...
+                  </div>
+                </div>
+              ) : visibleTrends && visibleTrends.length > 0 ? (
+                <ol className="text-gray-700 text-sm space-y-3 flex-1">
+                  {visibleTrends.map((trend, idx) => (
                     <li key={idx} className="flex flex-col">
                       <div className="flex items-center gap-2">
                         {/* Hashtag → LinkedIn jobs */}
@@ -304,9 +334,6 @@ export default function ProfilePage() {
                   No personalized trends yet. Try updating your profession and bio in your profile settings.
                 </div>
               )}
-
-              {/* Keep this button for consistency with your original UI */}
-              <button className="text-blue-500 text-xs mt-3 ml-2">Show more...</button>
             </div>
           </aside>
         </div>

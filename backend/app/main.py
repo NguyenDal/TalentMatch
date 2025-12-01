@@ -176,7 +176,7 @@ def ai_match_score(resume_text, job_text):
 
 def generate_profile_trends(profession, bio):
     """
-    Use GPT to generate up to 4 career-related 'trends' for the user
+    Use GPT to generate up to 10 career-related 'trends' for the user
     based only on their profession and bio.
 
     Each item has:
@@ -193,7 +193,7 @@ def generate_profile_trends(profession, bio):
 
     system_prompt = (
         "You are a career and job-search assistant. "
-        "Given a user's profession and short bio, suggest up to 4 highly relevant topics, "
+        "Given a user's profession and short bio, suggest up to 10 highly relevant topics, "
         "skills, or job-market trends they should pay attention to. "
         "Each item should feel like something you could show in a 'Trends for you' sidebar "
         "on a profile page.\n\n"
@@ -244,7 +244,7 @@ def generate_profile_trends(profession, bio):
             "url": url,
         })
 
-    return trends[:4]
+    return trends[:10]
 
 # === FASTAPI APPLICATION SETUP ===
 

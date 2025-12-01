@@ -1,14 +1,38 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { BASE_URL } from "./api"; // Make sure this points to your backend URL
+import { BASE_URL } from "./api";
 import { useAuth } from "./AuthContext";
 
 export default function ProfilePage() {
   const [tab, setTab] = useState("Posts");
   const [user, setUser] = useState(null);
+
+  // NEW: trends state
+  const [trends, setTrends] = useState([]);
+  const [trendsLoading, setTrendsLoading] = useState(true);
+
   const navigate = useNavigate();
   const { user: authUser } = useAuth();
+
+  // Helper: build a text query from a trend
+  const getTrendQuery = (trend) => {
+    const fromTitle = (trend?.title || "").trim();
+    const fromTag = (trend?.tag || "").replace("#", "").trim();
+    return fromTitle || fromTag || "career development";
+  };
+
+  // Helper: LinkedIn jobs search URL
+  const buildLinkedInJobsUrl = (trend) => {
+    const q = encodeURIComponent(getTrendQuery(trend));
+    return `https://www.linkedin.com/jobs/search/?keywords=${q}`;
+  };
+
+  // Helper: Coursera search URL
+  const buildCourseraUrl = (trend) => {
+    const q = encodeURIComponent(getTrendQuery(trend));
+    return `https://www.coursera.org/search?query=${q}`;
+  };
 
   // Fetch user profile info from backend on mount
   useEffect(() => {
@@ -43,6 +67,29 @@ export default function ProfilePage() {
       }
     };
     fetchUser();
+  }, [authUser]);
+
+  // NEW: Fetch personalized trends for the user
+  useEffect(() => {
+    const fetchTrends = async () => {
+      try {
+        const token = authUser?.token || localStorage.getItem("token");
+        if (!token) {
+          setTrends([]);
+          return;
+        }
+        const res = await axios.get(`${BASE_URL}/profile/trends/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setTrends(res.data.trends || []);
+      } catch (err) {
+        console.error("Failed to load trends", err);
+        setTrends([]);
+      } finally {
+        setTrendsLoading(false);
+      }
+    };
+    fetchTrends();
   }, [authUser]);
 
   // Sample posts remain static for now
@@ -202,24 +249,63 @@ export default function ProfilePage() {
             </div>
             <div className="bg-white rounded-2xl shadow-md p-5">
               <div className="font-bold mb-2 text-gray-800">Trends for you</div>
-              <ol className="text-gray-700 text-sm space-y-2">
-                <li>
-                  <span className="font-semibold">#The main news of the day</span>
-                  <span className="block text-xs text-gray-400">1. Popular</span>
-                </li>
-                <li>
-                  <span className="font-semibold">#News of the day</span>
-                  <span className="block text-xs text-gray-400">2. Popular</span>
-                </li>
-                <li>
-                  <span className="font-semibold">#It is very interesting</span>
-                  <span className="block text-xs text-gray-400">3. Popular</span>
-                </li>
-                <li>
-                  <span className="font-semibold">#Incident of the day</span>
-                  <span className="block text-xs text-gray-400">4. Popular</span>
-                </li>
-              </ol>
+
+              {trendsLoading ? (
+                <div className="text-xs text-gray-400">Loading personalized trends...</div>
+              ) : trends && trends.length > 0 ? (
+                <ol className="text-gray-700 text-sm space-y-3">
+                  {trends.map((trend, idx) => (
+                    <li key={idx} className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        {/* Hashtag → LinkedIn jobs */}
+                        <a
+                          href={buildLinkedInJobsUrl(trend)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold text-blue-600 hover:underline"
+                          title="View related jobs on LinkedIn"
+                        >
+                          {trend.tag || `#${trend.type || "topic"}`}
+                        </a>
+                        {/* Type pill → Coursera search */}
+                        {trend.type && (
+                          <a
+                            href={buildCourseraUrl(trend)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] uppercase tracking-wide text-gray-400 border border-gray-200 rounded-full px-2 py-[2px] hover:bg-blue-50 hover:text-blue-600 transition"
+                            title="View related courses on Coursera"
+                          >
+                            {trend.type}
+                          </a>
+                        )}
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        {trend.title}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {trend.subtitle}
+                      </div>
+                      {trend.url && (
+                        <a
+                          href={trend.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-blue-500 mt-1 hover:underline"
+                        >
+                          Learn more →
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <div className="text-xs text-gray-400">
+                  No personalized trends yet. Try updating your profession and bio in your profile settings.
+                </div>
+              )}
+
+              {/* Keep this button for consistency with your original UI */}
               <button className="text-blue-500 text-xs mt-3 ml-2">Show more...</button>
             </div>
           </aside>

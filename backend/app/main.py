@@ -172,6 +172,80 @@ def ai_match_score(resume_text, job_text):
     overlap = resume_words.intersection(job_words)
     return len(overlap) / (len(job_words) + 1e-5)
 
+# === PROFILE TRENDS (AI-ONLY) ===
+
+def generate_profile_trends(profession, bio):
+    """
+    Use GPT to generate up to 4 career-related 'trends' for the user
+    based only on their profession and bio.
+
+    Each item has:
+    {
+      "title": "short main text",
+      "subtitle": "1–2 sentence explanation",
+      "tag": "#Something",
+      "type": "topic|skill|career-path",
+      "url": null
+    }
+    """
+    profession = (profession or "").strip()
+    bio = (bio or "").strip()
+
+    system_prompt = (
+        "You are a career and job-search assistant. "
+        "Given a user's profession and short bio, suggest up to 4 highly relevant topics, "
+        "skills, or job-market trends they should pay attention to. "
+        "Each item should feel like something you could show in a 'Trends for you' sidebar "
+        "on a profile page.\n\n"
+        "Return ONLY a JSON array, no explanations. Each item must have:\n"
+        "{'title': 'short main text', 'subtitle': '1–2 sentence explanation', "
+        "'tag': '#Something', 'type': 'topic', 'url': null}\n"
+        "You may set 'type' to 'topic', 'skill', or 'career-path'."
+    )
+
+    user_prompt = (
+        f"User profession: {profession or 'Not specified'}\n"
+        f"User bio: {bio or 'Not specified'}\n\n"
+        "Generate the JSON array now."
+    )
+
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0.5,
+        max_tokens=600,
+    )
+
+    raw = response.choices[0].message.content
+    parsed = safe_json_parse(raw)
+
+    if not isinstance(parsed, list):
+        return []
+
+    trends = []
+    for item in parsed:
+        title = (item.get("title") or "").strip()
+        if not title:
+            continue
+
+        subtitle = clean_explanation(item.get("subtitle") or "")
+        tag = (item.get("tag") or "").strip()
+        ttype = (item.get("type") or "topic").strip()
+        url = item.get("url", None)
+
+        trends.append({
+            "title": title,
+            "subtitle": subtitle,
+            "tag": tag,
+            "type": ttype,
+            "url": url,
+        })
+
+    return trends[:4]
+
 # === FASTAPI APPLICATION SETUP ===
 
 app = FastAPI()
@@ -231,7 +305,7 @@ async def upload_resume(
             "1. Suggest up to 5 very relevant, dynamic, and context-specific questions a candidate might want to ask about their fit or preparation for this job (DO NOT use generic questions; infer from the specific job). "
             "2. For each question, give a clear answer based on the resume and job description. "
             "Format your answer as a JSON list like this: "
-            '[{"question": "...", "answer": "..."}]'
+            '[{\"question\": \"...\", \"answer\": \"...\"}]'
         )
         user_prompt = (
             f"Job Description:\n{job_text}\n\nResume:\n{resume_text}\n\n"
@@ -387,6 +461,23 @@ def read_users_me(current_user: User = Depends(get_current_user)):
             "profile_image_url": current_user.profile_image_url,
             "profession": current_user.profession,
             "bio": current_user.bio}
+
+# --- PROFILE TRENDS ENDPOINT ---
+
+@app.get("/profile/trends/")
+def get_profile_trends(current_user: User = Depends(get_current_user)):
+    """
+    Return AI-generated 'trends for you' based on the user's profession and bio.
+    """
+    profession = current_user.profession or ""
+    bio = current_user.bio or ""
+
+    try:
+        trends = generate_profile_trends(profession, bio)
+    except Exception:
+        trends = []
+
+    return {"trends": trends}
 
 # --- PASSWORD RESET: Step 2a - Generate and return a password reset token ---
 

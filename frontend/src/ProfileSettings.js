@@ -258,12 +258,12 @@ function Security() {
   return <div className="max-w-3xl text-black">Security settings go here (2FA, etc).</div>;
 }
 
-export default function SettingsPage() {
+export default function ProfileSettings() {
   const sidebar = [
-    { name: "Public profile", path: "/profile" },
-    { name: "Account settings", path: "/profile/account" },
-    { name: "Notifications", path: "/profile/notifications" },
-    { name: "Security", path: "/profile/security" },
+    { name: "Public profile", path: "/dashboard/settings/profile" },
+    { name: "Account settings", path: "/dashboard/settings/account" },
+    { name: "Notifications", path: "/dashboard/settings/notifications" },
+    { name: "Security", path: "/dashboard/settings/security" },
   ];
 
   const navigate = useNavigate();
@@ -275,13 +275,10 @@ export default function SettingsPage() {
       >
         <aside className="w-72 border-r border-gray-200 px-8 py-10 relative">
           <button
-            onClick={() => navigate("/profile")}
+            onClick={() => navigate("/dashboard")}
             className="absolute left-4 top-4 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-full shadow-lg p-2 transition flex items-center justify-center"
-            style={{
-              boxShadow: "0 4px 16px 0 rgba(0,0,0,0.07)",
-              border: "2px solid white",
-            }}
-            aria-label="Back to profile"
+            style={{ boxShadow: "0 4px 16px 0 rgba(0,0,0,0.07)", border: "2px solid white" }}
+            aria-label="Back to dashboard"
           >
             <FiArrowLeft size={24} />
           </button>
@@ -291,12 +288,10 @@ export default function SettingsPage() {
               <NavLink
                 key={item.name}
                 to={item.path}
-                end={item.path === "/profile"}
+                end={item.path === "/dashboard/settings"}
                 className={({ isActive }) =>
                   "px-4 py-2 text-left rounded-md font-medium transition " +
-                  (isActive
-                    ? "bg-blue-100 text-blue-700"
-                    : "hover:bg-gray-50 text-gray-700")
+                  (isActive ? "bg-blue-100 text-blue-700" : "hover:bg-gray-50 text-gray-700")
                 }
               >
                 {item.name}
@@ -306,10 +301,11 @@ export default function SettingsPage() {
         </aside>
         <section className="flex-1 px-16 py-12 min-w-0 flex flex-col">
           <Routes>
-            <Route path="/" element={<ProfileDetails />} />
-            <Route path="/account" element={<AccountSettings />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/security" element={<Security />} />
+            {/* use nested (relative) paths under /dashboard/settings/* */}
+            <Route path="profile" element={<ProfileDetails />} />
+            <Route path="account" element={<AccountSettings />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="security" element={<Security />} />
           </Routes>
         </section>
       </div>

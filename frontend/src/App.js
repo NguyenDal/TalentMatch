@@ -8,7 +8,7 @@ import ResetPassword from "./ResetPassword";
 import RequestPasswordReset from "./RequestPasswordReset";
 import NavBar from "./NavBar";
 import PublicNavBar from "./PublicNavBar";
-import SettingsPage from "./SettingsPage.js";
+import ProfileSettings from "./ProfileSettings.js";
 import DashboardPage from "./DashboardPage"; 
 
 // Main authenticated content (with app nav bar)
@@ -70,7 +70,7 @@ const App = () => {
           element={
             <>
               <NavBar setMenu={() => { }} menu="dashboard" />
-              <SettingsPage />
+              <ProfileSettings />
             </>
           }
         />

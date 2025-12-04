@@ -171,7 +171,7 @@ export default function DashboardPage() {
                 </div>
                 <button
                   className="border border-blue-400 text-blue-500 hover:bg-blue-100 font-semibold px-6 py-2 rounded-3xl transition"
-                  onClick={() => navigate("/dashboard/settings")}
+                  onClick={() => navigate("/dashboard/settings/profile")}
                 >
                   Profile settings
                 </button>

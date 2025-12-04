@@ -133,12 +133,10 @@ function ProfileDetails() {
       saved = true;
       showMessage("Saved successfully.", "success");
     } catch (err) {
-      showMessage(err.response?.data?.detail || "Save failed.", "error");
+      setMsg("Save failed.");
     } finally {
       setSaving(false);
-      if (saved) {
-        navigate("/profile"); // redirect to UserProfile
-      }
+      if (saved) navigate("/dashboard"); // changed from /profile
     }
   };
 

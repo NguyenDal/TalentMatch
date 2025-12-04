@@ -9,7 +9,7 @@ import RequestPasswordReset from "./RequestPasswordReset";
 import NavBar from "./NavBar";
 import PublicNavBar from "./PublicNavBar";
 import SettingsPage from "./SettingsPage.js";
-import UserProfile from "./UserProfile";
+import DashboardPage from "./DashboardPage"; 
 
 // Main authenticated content (with app nav bar)
 const MainContent = () => {
@@ -21,8 +21,7 @@ const MainContent = () => {
       {menu === "matcher" ? (
         <ResumeMatcher />
       ) : (
-        // Route to /profile with subroutes (see below)
-        <UserProfile />
+        <DashboardPage /> // was <UserProfile />
       )}
     </div>
   );
@@ -57,18 +56,24 @@ const App = () => {
     return (
       <Routes>
         <Route path="/" element={<MainContent />} />
-        <Route path="/profile/*" element={
-          <>
-            <NavBar setMenu={() => { }} menu="profile" />
-            <UserProfile />
-          </>
-        } />
-        <Route path="/profile/settings/*" element={
-          <>
-            <NavBar setMenu={() => { }} menu="profile" />
-            <SettingsPage />
-          </>
-        } />
+        <Route
+          path="/dashboard/*"
+          element={
+            <>
+              <NavBar setMenu={() => { }} menu="dashboard" />
+              <DashboardPage />
+            </>
+          }
+        />
+        <Route
+          path="/dashboard/settings/*"
+          element={
+            <>
+              <NavBar setMenu={() => { }} menu="dashboard" />
+              <SettingsPage />
+            </>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );

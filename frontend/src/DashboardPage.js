@@ -4,7 +4,7 @@ import axios from "axios";
 import { BASE_URL } from "./api";
 import { useAuth } from "./AuthContext";
 
-export default function ProfilePage() {
+export default function DashboardPage() {
   const [tab, setTab] = useState("Posts");
   const [user, setUser] = useState(null);
 
@@ -171,7 +171,7 @@ export default function ProfilePage() {
                 </div>
                 <button
                   className="border border-blue-400 text-blue-500 hover:bg-blue-100 font-semibold px-6 py-2 rounded-3xl transition"
-                  onClick={() => navigate("/profile/settings")}
+                  onClick={() => navigate("/dashboard/settings")}
                 >
                   Profile settings
                 </button>

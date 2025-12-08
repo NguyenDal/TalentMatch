@@ -120,10 +120,12 @@ export function AuthProvider({ children }) {
     // Function to perform the login API call and set authentication data on success.
     // Accepts an optional "remember" parameter to indicate storage preference.
     const performLogin = async (usernameOrEmail, password, remember = false) => {
-        const params = new URLSearchParams(); // Create URL-encoded parameters for the login request.
-        params.append("username", usernameOrEmail); // Add the username or email to the parameters.
-        params.append("password", password); // Add the password to the parameters.
-        params.append("grant_type", "password"); // Specify the grant type for the OAuth2 flow.
+        const params = new URLSearchParams();
+        params.append("username", usernameOrEmail);
+        params.append("password", password);
+        params.append("grant_type", "password");
+        params.append("remember", remember ? "true" : "false"); // <-- send remember to backend
+
         const res = await axios.post(`${BASE_URL}/login/`, params, {
             headers: { "Content-Type": "application/x-www-form-urlencoded" }, // Set the content type for the request.
         });

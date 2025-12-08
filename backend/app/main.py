@@ -393,7 +393,11 @@ def register_user(
 # === USER LOGIN ENDPOINT ===
 
 @app.post("/login/")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    remember: bool = Form(False),  # <-- add remember flag from form
+    db: Session = Depends(get_db)
+):
     """
     Login with either username or email.
     Returns a JWT token and basic user info on success.
@@ -408,15 +412,18 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status_code=401, detail="Incorrect username/email or password")
 
     SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret")
-    ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+    ALGORITHM = "HS256"
     payload = {
         "sub": user.username,
         "user_id": user.id,
         "email": user.email,
         "username": user.username,
-        "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     }
-    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    # If remember is unchecked => 1 day expiry; if checked => no exp (treated as non-expiring by frontend)
+    if not remember:
+        payload["exp"] = datetime.utcnow() + timedelta(days=1)
+
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return {
         "access_token": token,
         "token_type": "bearer",

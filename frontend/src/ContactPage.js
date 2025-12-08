@@ -91,11 +91,6 @@ export default function ContactPage() {
         `Hi ${info.name}, I’d love to connect about an opportunity.`
     )}`;
 
-    // CHANGE:
-    // - Optional: phone "tel:" link in case you want to reuse it later.
-    // - Not used in UI here, but kept for convenience.
-    const telHref = `tel:${phoneE164}`;
-
     return (
         // Full-page gradient background with spacing that accounts for the top navbar
         <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-800 via-purple-500 to-blue-400 relative overflow-hidden pt-28 pb-16 px-6">

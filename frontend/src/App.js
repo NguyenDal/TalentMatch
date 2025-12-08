@@ -10,6 +10,7 @@ import NavBar from "./NavBar";
 import PublicNavBar from "./PublicNavBar";
 import ProfileSettings from "./ProfileSettings.js";
 import DashboardPage from "./DashboardPage"; 
+import ContactPage from "./ContactPage";
 
 // Main authenticated content (with app nav bar)
 const MainContent = () => {
@@ -83,7 +84,7 @@ const App = () => {
   return (
     <Routes>
       <Route
-        path="/"
+        path="/login"
         element={
           <PublicLayout>
             <Login onSwitch={() => setShowLogin(false)} onLogin={login} />
@@ -114,8 +115,16 @@ const App = () => {
           </PublicLayout>
         }
       />
-      {/* Fallback route */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route
+        path="/contact"
+        element={
+          <PublicLayout>
+            <ContactPage />
+          </PublicLayout>
+        }
+      />
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 };

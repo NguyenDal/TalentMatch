@@ -133,7 +133,7 @@ export default function ContactPage() {
                         . Or book a quick call via{" "}
                         <a
                             className="text-purple-600 hover:underline"
-                            href="https://cal.com/"
+                            href="https://cal.com/nguyen-an-nguyen-j42hfc/30min"
                             target="_blank"
                             rel="noreferrer"
                         >

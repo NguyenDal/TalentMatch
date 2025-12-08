@@ -1,13 +1,19 @@
 import React from "react";
 // CHANGE:
 // - Added icons for the new 3 contact options (Email / Book a call / WhatsApp)
-// - Using react-icons keeps it lightweight and consistent with your LinkedIn/GitHub style.
+// - Using react-icons keeps it lightweight and consistent with LinkedIn/GitHub style.
 import { FaEnvelope, FaWhatsapp, FaCalendarCheck } from "react-icons/fa";
 
 export default function ContactPage() {
     // Centralized profile data for easy editing
     const info = {
         name: "An Nguyen",
+
+        // CHANGE:
+        // - Added country code so people outside Canada can contact easily.
+        // - Keep this as digits with leading +.
+        countryCode: "+1",
+
         phone: "782-409-5339",
         email: "annguyen270504@gmail.com",
         linkedin: "https://linkedin.com/in/annguyen270504",
@@ -63,6 +69,13 @@ export default function ContactPage() {
     };
 
     // CHANGE:
+    // - Normalize phone to an international E.164-like number for one-click contact.
+    const phoneDigits = info.phone.replace(/[^0-9]/g, "");
+    const countryDigits = info.countryCode.replace(/[^0-9]/g, "");
+    const phoneE164 = `${info.countryCode}${phoneDigits}`;
+    const phoneE164DigitsOnly = `${countryDigits}${phoneDigits}`;
+
+    // CHANGE:
     // - Centralized CTA links for the new three-card contact UI.
     // - This keeps JSX cleaner and makes future edits easier.
     const emailHref = `mailto:${info.email}?subject=Opportunity for ${encodeURIComponent(
@@ -72,12 +85,16 @@ export default function ContactPage() {
     const calHref = "https://cal.com/nguyen-an-nguyen-j42hfc/30min";
 
     // CHANGE:
-    // - WhatsApp deep link.
-    // - Uses your phone number (digits only).
-    // - If you want to add country code explicitly, you can change info.phone to include it.
-    const whatsappHref = `https://wa.me/${info.phone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+    // - WhatsApp deep link now uses country code + number.
+    // - wa.me requires digits only (no +, no spaces).
+    const whatsappHref = `https://wa.me/${phoneE164DigitsOnly}?text=${encodeURIComponent(
         `Hi ${info.name}, I’d love to connect about an opportunity.`
     )}`;
+
+    // CHANGE:
+    // - Optional: phone "tel:" link in case you want to reuse it later.
+    // - Not used in UI here, but kept for convenience.
+    const telHref = `tel:${phoneE164}`;
 
     return (
         // Full-page gradient background with spacing that accounts for the top navbar
@@ -144,11 +161,6 @@ export default function ContactPage() {
                 <div className="rounded-xl border border-gray-100 p-5 bg-gray-50">
                     <div className="font-semibold text-gray-800 mb-4">Get in touch</div>
 
-                    {/* 
-                        CHANGE:
-                        - Replaced the single sentence with 3 user-friendly action cards.
-                        - Styling intentionally matches your project card style for consistency.
-                    */}
                     <div className="grid gap-4 sm:grid-cols-3">
                         {/* Email card */}
                         <a
@@ -219,7 +231,11 @@ export default function ContactPage() {
                                 Fast, informal updates
                             </div>
                             <div className="text-gray-700 text-sm mt-2">
-                                Message me at <span className="font-medium">{info.phone}</span>
+                                {/* 
+                                    CHANGE:
+                                    - Display with country code to avoid confusion for international visitors.
+                                */}
+                                Message me at <span className="font-medium">{phoneE164}</span>
                             </div>
                             <div className="text-purple-600 text-sm mt-3">
                                 Start chat →

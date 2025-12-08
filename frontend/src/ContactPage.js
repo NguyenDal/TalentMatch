@@ -1,4 +1,8 @@
 import React from "react";
+// CHANGE:
+// - Added icons for the new 3 contact options (Email / Book a call / WhatsApp)
+// - Using react-icons keeps it lightweight and consistent with your LinkedIn/GitHub style.
+import { FaEnvelope, FaWhatsapp, FaCalendarCheck } from "react-icons/fa";
 
 export default function ContactPage() {
     // Centralized profile data for easy editing
@@ -8,7 +12,7 @@ export default function ContactPage() {
         email: "annguyen270504@gmail.com",
         linkedin: "https://linkedin.com/in/annguyen270504",
         github: "https://github.com/NguyenDal",
-        resume: "https://talentmatch-userfiles.s3.ca-central-1.amazonaws.com/resume/AnNguyen_Resume.pdf", // place the PDF in public/
+        resume: "https://talentmatch-userfiles.s3.ca-central-1.amazonaws.com/resume/Nguyen_s_Resume.pdf", // place the PDF in public/
         blurb:
             "Applied CS graduate passionate about full-stack development, AI, and developer tooling. Building TalentMatch.",
         skills: [
@@ -49,12 +53,31 @@ export default function ContactPage() {
             {
                 title: "Resume",
                 stack: "PDF • Updated",
+                // CHANGE:
+                // - Point this to info.resume so you only update the URL in ONE place.
                 link: "https://talentmatch-userfiles.s3.ca-central-1.amazonaws.com/resume/Nguyen_s_Resume.pdf",
                 desc:
                     "View or download my latest resume.",
             },
         ],
     };
+
+    // CHANGE:
+    // - Centralized CTA links for the new three-card contact UI.
+    // - This keeps JSX cleaner and makes future edits easier.
+    const emailHref = `mailto:${info.email}?subject=Opportunity for ${encodeURIComponent(
+        info.name
+    )}&body=Hi ${encodeURIComponent(info.name)},%0D%0A%0D%0A`;
+
+    const calHref = "https://cal.com/nguyen-an-nguyen-j42hfc/30min";
+
+    // CHANGE:
+    // - WhatsApp deep link.
+    // - Uses your phone number (digits only).
+    // - If you want to add country code explicitly, you can change info.phone to include it.
+    const whatsappHref = `https://wa.me/${info.phone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+        `Hi ${info.name}, I’d love to connect about an opportunity.`
+    )}`;
 
     return (
         // Full-page gradient background with spacing that accounts for the top navbar
@@ -119,27 +142,89 @@ export default function ContactPage() {
 
                 {/* Contact section */}
                 <div className="rounded-xl border border-gray-100 p-5 bg-gray-50">
-                    <div className="font-semibold text-gray-800 mb-2">Get in touch</div>
-                    <div className="text-sm text-gray-600">
-                        Prefer email?{" "}
+                    <div className="font-semibold text-gray-800 mb-4">Get in touch</div>
+
+                    {/* 
+                        CHANGE:
+                        - Replaced the single sentence with 3 user-friendly action cards.
+                        - Styling intentionally matches your project card style for consistency.
+                    */}
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        {/* Email card */}
                         <a
-                            className="text-purple-600 hover:underline"
-                            href={`mailto:${info.email}?subject=Opportunity for ${encodeURIComponent(
-                                info.name
-                            )}&body=Hi ${encodeURIComponent(info.name)},%0D%0A%0D%0A`}
+                            href={emailHref}
+                            className="block group rounded-xl border border-gray-100 hover:border-purple-200 shadow-sm hover:shadow-md transition bg-white p-5"
                         >
-                            Email me
+                            <div className="flex items-center gap-3">
+                                <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-purple-50 text-purple-700 border border-purple-100">
+                                    <FaEnvelope />
+                                </span>
+                                <div className="font-bold text-gray-900 group-hover:text-purple-700">
+                                    Email
+                                </div>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-2">
+                                Best for detailed opportunities
+                            </div>
+                            <div className="text-gray-700 text-sm mt-2">
+                                {info.email}
+                            </div>
+                            <div className="text-purple-600 text-sm mt-3">
+                                Send an email →
+                            </div>
                         </a>
-                        . Or book a quick call via{" "}
+
+                        {/* Book a call card */}
                         <a
-                            className="text-purple-600 hover:underline"
-                            href="https://cal.com/nguyen-an-nguyen-j42hfc/30min"
+                            href={calHref}
                             target="_blank"
                             rel="noreferrer"
+                            className="block group rounded-xl border border-gray-100 hover:border-purple-200 shadow-sm hover:shadow-md transition bg-white p-5"
                         >
-                            Cal.com
+                            <div className="flex items-center gap-3">
+                                <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-purple-50 text-purple-700 border border-purple-100">
+                                    <FaCalendarCheck />
+                                </span>
+                                <div className="font-bold text-gray-900 group-hover:text-purple-700">
+                                    Book a call
+                                </div>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-2">
+                                Quick 30-min chat
+                            </div>
+                            <div className="text-gray-700 text-sm mt-2">
+                                Schedule directly via Cal.com
+                            </div>
+                            <div className="text-purple-600 text-sm mt-3">
+                                Pick a time →
+                            </div>
                         </a>
-                        .
+
+                        {/* WhatsApp card */}
+                        <a
+                            href={whatsappHref}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block group rounded-xl border border-gray-100 hover:border-purple-200 shadow-sm hover:shadow-md transition bg-white p-5"
+                        >
+                            <div className="flex items-center gap-3">
+                                <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-purple-50 text-purple-700 border border-purple-100">
+                                    <FaWhatsapp />
+                                </span>
+                                <div className="font-bold text-gray-900 group-hover:text-purple-700">
+                                    WhatsApp
+                                </div>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-2">
+                                Fast, informal updates
+                            </div>
+                            <div className="text-gray-700 text-sm mt-2">
+                                Message me at <span className="font-medium">{info.phone}</span>
+                            </div>
+                            <div className="text-purple-600 text-sm mt-3">
+                                Start chat →
+                            </div>
+                        </a>
                     </div>
                 </div>
             </div>

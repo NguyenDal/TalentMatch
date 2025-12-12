@@ -37,7 +37,7 @@ export default function PublicNavBar() {
       <div className="hidden md:flex items-center gap-3">
         <button
           className="border border-white text-white px-5 py-2 rounded hover:bg-white hover:text-purple-700 font-medium transition"
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/login")}
         >
           Login
         </button>

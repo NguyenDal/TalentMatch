@@ -9,8 +9,9 @@ import RequestPasswordReset from "./RequestPasswordReset";
 import NavBar from "./NavBar";
 import PublicNavBar from "./PublicNavBar";
 import ProfileSettings from "./ProfileSettings.js";
-import DashboardPage from "./DashboardPage"; 
+import DashboardPage from "./DashboardPage";
 import ContactPage from "./ContactPage";
+import HomeIntro from "./HomeIntro"; // 🔹 NEW: intro/landing page
 
 // Main authenticated content (with app nav bar)
 const MainContent = () => {
@@ -19,11 +20,7 @@ const MainContent = () => {
     <div>
       <NavBar setMenu={setMenu} menu={menu} />
       {/* Use React Router for actual page routing */}
-      {menu === "matcher" ? (
-        <ResumeMatcher />
-      ) : (
-        <DashboardPage /> // was <UserProfile />
-      )}
+      {menu === "matcher" ? <ResumeMatcher /> : <DashboardPage />}
     </div>
   );
 };
@@ -33,7 +30,9 @@ function PublicLayout({ children }) {
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-800 via-purple-500 to-blue-400 relative overflow-hidden">
       <PublicNavBar />
-      <div className="w-full flex-1 flex items-center justify-center">{children}</div>
+      <div className="w-full flex-1 flex items-center justify-center">
+        {children}
+      </div>
     </div>
   );
 }
@@ -61,7 +60,7 @@ const App = () => {
           path="/dashboard/*"
           element={
             <>
-              <NavBar setMenu={() => { }} menu="dashboard" />
+              <NavBar setMenu={() => {}} menu="dashboard" />
               <DashboardPage />
             </>
           }
@@ -70,11 +69,14 @@ const App = () => {
           path="/dashboard/settings/*"
           element={
             <>
-              <NavBar setMenu={() => { }} menu="dashboard" />
+              <NavBar setMenu={() => {}} menu="dashboard" />
               <ProfileSettings />
             </>
           }
         />
+        {/* If logged in and hit /login or /contact, push back to app */}
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/contact" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
@@ -83,6 +85,15 @@ const App = () => {
   // Not logged in: show public screens with shared purple nav
   return (
     <Routes>
+      <Route
+        path="/"
+        element={
+          <PublicLayout>
+            <HomeIntro />
+          </PublicLayout>
+        }
+      />
+
       <Route
         path="/login"
         element={
@@ -123,8 +134,8 @@ const App = () => {
           </PublicLayout>
         }
       />
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      {/* Any unknown public route → home intro */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

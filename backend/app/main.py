@@ -5,12 +5,13 @@ from fastapi import BackgroundTasks
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import PyPDF2
-from docx import Document  # <-- New import for Word support
+from docx import Document
 import openai
 import os
 import re
 import json
-
+from app.s3_utils import upload_file_to_s3
+from uuid import uuid4
 
 # === Database & Auth Imports ===
 from sqlalchemy.orm import Session
@@ -171,6 +172,84 @@ def ai_match_score(resume_text, job_text):
     overlap = resume_words.intersection(job_words)
     return len(overlap) / (len(job_words) + 1e-5)
 
+# === PROFILE TRENDS (AI-ONLY) ===
+
+def generate_profile_trends(profession, bio):
+    """
+    Use GPT to generate up to 10 career-related 'trends' for the user
+    based only on their profession and bio.
+
+    Each item has:
+    {
+      "title": "short main text",
+      "subtitle": "1–2 sentence explanation",
+      "tag": "#Something",
+      "type": "topic|skill|career-path",
+      "url": null
+    }
+    """
+    profession = (profession or "").strip()
+    bio = (bio or "").strip()
+
+    # If BOTH are missing => do not generate trends
+    if not profession and not bio:
+        return []
+
+    system_prompt = (
+        "You are a career and job-search assistant. "
+        "Given a user's profession and short bio, suggest up to 10 highly relevant topics, "
+        "skills, or job-market trends they should pay attention to. "
+        "Each item should feel like something you could show in a 'Trends for you' sidebar "
+        "on a profile page.\n\n"
+        "Return ONLY a JSON array, no explanations. Each item must have:\n"
+        "{'title': 'short main text', 'subtitle': '1–2 sentence explanation', "
+        "'tag': '#Something', 'type': 'topic', 'url': null}\n"
+        "You may set 'type' to 'topic', 'skill', or 'career-path'."
+    )
+
+    user_prompt = (
+        f"User profession: {profession or 'Not specified'}\n"
+        f"User bio: {bio or 'Not specified'}\n\n"
+        "Generate the JSON array now."
+    )
+
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0.5,
+        max_tokens=600,
+    )
+
+    raw = response.choices[0].message.content
+    parsed = safe_json_parse(raw)
+
+    if not isinstance(parsed, list):
+        return []
+
+    trends = []
+    for item in parsed:
+        title = (item.get("title") or "").strip()
+        if not title:
+            continue
+
+        subtitle = clean_explanation(item.get("subtitle") or "")
+        tag = (item.get("tag") or "").strip()
+        ttype = (item.get("type") or "topic").strip()
+        url = item.get("url", None)
+
+        trends.append({
+            "title": title,
+            "subtitle": subtitle,
+            "tag": tag,
+            "type": ttype,
+            "url": url,
+        })
+
+    return trends[:10]
+
 # === FASTAPI APPLICATION SETUP ===
 
 app = FastAPI()
@@ -230,7 +309,7 @@ async def upload_resume(
             "1. Suggest up to 5 very relevant, dynamic, and context-specific questions a candidate might want to ask about their fit or preparation for this job (DO NOT use generic questions; infer from the specific job). "
             "2. For each question, give a clear answer based on the resume and job description. "
             "Format your answer as a JSON list like this: "
-            '[{"question": "...", "answer": "..."}]'
+            '[{\"question\": \"...\", \"answer\": \"...\"}]'
         )
         user_prompt = (
             f"Job Description:\n{job_text}\n\nResume:\n{resume_text}\n\n"
@@ -268,6 +347,8 @@ async def upload_resume(
 @app.post("/register/")
 def register_user(
     username: str = Form(...),
+    first_name: str = Form(...),
+    last_name: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db)
@@ -275,12 +356,24 @@ def register_user(
     """
     Register a new user account (requires unique username and email).
     """
+    # Uniqueness checks
     if db.query(User).filter(User.username == username).first():
         raise HTTPException(status_code=400, detail="Username already registered")
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Hash password
     hashed_pw = hash_password(password)
-    new_user = User(username=username, email=email, hashed_password=hashed_pw)
+
+    # Create user with first/last name populated
+    new_user = User(
+        username=username.strip(),
+        email=email.strip().lower(),
+        hashed_password=hashed_pw,
+        first_name=first_name.strip(),
+        last_name=last_name.strip(),
+    )
+
     db.add(new_user)
     try:
         db.commit()
@@ -288,12 +381,23 @@ def register_user(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="Registration failed")
-    return {"id": new_user.id, "username": new_user.username, "email": new_user.email}
+
+    return {
+        "id": new_user.id,
+        "username": new_user.username,
+        "email": new_user.email,
+        "first_name": new_user.first_name,
+        "last_name": new_user.last_name,
+    }
 
 # === USER LOGIN ENDPOINT ===
 
 @app.post("/login/")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    remember: bool = Form(False),  # <-- add remember flag from form
+    db: Session = Depends(get_db)
+):
     """
     Login with either username or email.
     Returns a JWT token and basic user info on success.
@@ -308,15 +412,18 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status_code=401, detail="Incorrect username/email or password")
 
     SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret")
-    ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+    ALGORITHM = "HS256"
     payload = {
         "sub": user.username,
         "user_id": user.id,
         "email": user.email,
         "username": user.username,
-        "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     }
-    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    # If remember is unchecked => 1 day expiry; if checked => no exp (treated as non-expiring by frontend)
+    if not remember:
+        payload["exp"] = datetime.utcnow() + timedelta(days=1)
+
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -356,7 +463,33 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @app.get("/me/")
 def read_users_me(current_user: User = Depends(get_current_user)):
     """Get details about the currently logged-in user (JWT required)."""
-    return {"id": current_user.id, "username": current_user.username, "email": current_user.email}
+    return {"id": current_user.id, 
+            "username": current_user.username, 
+            "full_name": current_user.full_name, 
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "email": current_user.email, 
+            "email_verified": bool(getattr(current_user, "email_verified", False)),
+            "profile_image_url": current_user.profile_image_url,
+            "profession": current_user.profession,
+            "bio": current_user.bio}
+
+# --- PROFILE TRENDS ENDPOINT ---
+
+@app.get("/profile/trends/")
+def get_profile_trends(current_user: User = Depends(get_current_user)):
+    """
+    Return AI-generated 'trends for you' based on the user's profession and bio.
+    """
+    profession = current_user.profession or ""
+    bio = current_user.bio or ""
+
+    try:
+        trends = generate_profile_trends(profession, bio)
+    except Exception:
+        trends = []
+
+    return {"trends": trends}
 
 # --- PASSWORD RESET: Step 2a - Generate and return a password reset token ---
 
@@ -444,3 +577,246 @@ def reset_password(
     db.commit()
 
     return {"ok": True, "message": "Password has been reset successfully."}
+
+# --- PROFILE UPDATE ENDPOINT ---
+@app.patch("/profile/update/")
+def update_profile(
+    first_name: str = Form(None),
+    last_name: str = Form(None),
+    email: str = Form(None),
+    profession: str = Form(None),
+    bio: str = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if first_name is not None:
+        current_user.first_name = first_name.strip()
+    if last_name is not None:
+        current_user.last_name = last_name.strip()
+    if email is not None:
+        current_user.email = email.strip().lower()
+    if profession is not None:
+        current_user.profession = profession.strip()
+    if bio is not None:
+        current_user.bio = bio.strip()
+    db.commit()
+    db.refresh(current_user)
+    return {"ok": True}
+
+# --- PROFILE IMAGE UPLOAD ENDPOINT ---
+
+@app.post("/upload-profile-image/")
+async def upload_profile_image(
+    image: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Uploads a profile image for the authenticated user, stores it in S3, and saves the URL in the database.
+    """
+    # Optional: Check allowed file types
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if image.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Unsupported image type")
+
+    # Generate a filename (you can use user ID for uniqueness)
+    filename = f"user_{current_user.id}_{uuid4().hex}.{image.filename.split('.')[-1]}"
+
+    # Upload to S3
+    s3_url = upload_file_to_s3(image, filename=filename, folder="avatars/")
+    if not s3_url:
+        raise HTTPException(status_code=500, detail="Failed to upload image to S3")
+
+    # Update the user's profile_image_url in the database
+    current_user.profile_image_url = s3_url
+    db.commit()
+    db.refresh(current_user)
+
+    return {"ok": True, "profile_image_url": s3_url}
+
+# --- PROFILE IMAGE CLEAR ENDPOINT ---
+
+@app.post("/profile/clear-image/")
+def clear_profile_image(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    current_user.profile_image_url = None
+    db.commit()
+    return {"ok": True}
+
+# === ACCOUNT SETTINGS ENDPOINTS ===
+
+@app.patch("/account/update/")
+async def update_account(
+    background_tasks: BackgroundTasks,
+    username: str = Form(None),
+    email: str = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update username and/or primary email.
+    - Checks uniqueness.
+    - If email changed, mark as unverified.
+      The user must click "Send verification code" separately to receive a code.
+    """
+    email_changed = False
+
+    # --- Username update ---
+    if username is not None:
+        new_username = username.strip()
+        if new_username and new_username != current_user.username:
+            existing_user = (
+                db.query(User)
+                .filter(User.username == new_username, User.id != current_user.id)
+                .first()
+            )
+            if existing_user:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This username is already taken. Please choose another.",
+                )
+            current_user.username = new_username
+
+    # --- Email update ---
+    if email is not None:
+        new_email = email.strip().lower()
+        if new_email and new_email != current_user.email:
+            existing_email = (
+                db.query(User)
+                .filter(User.email == new_email, User.id != current_user.id)
+                .first()
+            )
+            if existing_email:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This email is already registered. Try logging in instead.",
+                )
+
+            # validate format
+            try:
+                validate_email(new_email)
+            except EmailNotValidError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+
+            # apply new email + mark as unverified, clear any previous code
+            current_user.email = new_email
+            email_changed = True
+
+            # these attrs need to exist on your User model
+            current_user.email_verified = False
+            current_user.email_verification_code = None
+            current_user.email_verification_expires_at = None
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "ok": True,
+        "email_changed": email_changed,
+        "email_verified": bool(getattr(current_user, "email_verified", False)),
+    }
+
+@app.post("/account/send-verification/")
+async def send_verification_email(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Send / resend a 6-digit verification code to the user's current primary email.
+    Can be used even if they didn't just change the email.
+    """
+    email = (current_user.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="No primary email on file.")
+
+    # Optional: block resends if already verified
+    if getattr(current_user, "email_verified", False):
+        raise HTTPException(status_code=400, detail="Email is already verified.")
+
+    # generate verification code – use model helper if present
+    if hasattr(current_user, "generate_email_verification_code"):
+        code = current_user.generate_email_verification_code(expires_in_minutes=20)
+    else:
+        # Fallback: simple 6-digit code
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        current_user.email_verification_code = code
+        current_user.email_verification_expires_at = datetime.utcnow() + timedelta(
+            minutes=20
+        )
+        current_user.email_verified = False
+
+    db.commit()
+    db.refresh(current_user)
+
+    fm = FastMail(conf)
+    message = MessageSchema(
+        subject="Verify your email - TalentMatch",
+        recipients=[email],
+        body=f"""Hi {current_user.username},
+
+Here is your TalentMatch email verification code:
+
+{code}
+
+This code will expire in 20 minutes.
+
+If you did not request this, you can safely ignore this email.
+
+Thanks,
+TalentMatch Team
+""",
+        subtype="plain",
+    )
+    background_tasks.add_task(fm.send_message, message)
+
+    return {"ok": True, "message": "Verification code sent."}
+
+
+@app.post("/account/verify-email/")
+def verify_email_code(
+    code: str = Form(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Verify the user's email with the 6-digit code.
+    """
+    # Ensure fields exist even if DB not migrated yet
+    verification_code = getattr(current_user, "email_verification_code", None)
+    verification_expires_at = getattr(
+        current_user, "email_verification_expires_at", None
+    )
+
+    if not verification_code:
+        raise HTTPException(status_code=400, detail="No verification code on file.")
+
+    if code.strip() != verification_code:
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
+
+    if verification_expires_at and verification_expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Verification code has expired.")
+
+    current_user.email_verified = True
+    current_user.email_verification_code = None
+    current_user.email_verification_expires_at = None
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {"ok": True, "email_verified": True}
+
+
+@app.delete("/account/delete/")
+def delete_account(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Permanently delete the current user's account.
+    Frontend should show a strong confirmation
+    ('Are you sure? This action cannot be undone.')
+    before calling this endpoint.
+    """
+    db.delete(current_user)
+    db.commit()
+    return {"ok": True, "message": "Account deleted."}

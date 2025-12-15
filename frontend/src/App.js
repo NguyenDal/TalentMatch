@@ -8,8 +8,10 @@ import ResetPassword from "./ResetPassword";
 import RequestPasswordReset from "./RequestPasswordReset";
 import NavBar from "./NavBar";
 import PublicNavBar from "./PublicNavBar";
-import ProfileSetting from "./ProfileSetting";
-import UserProfile from "./UserProfile";
+import ProfileSettings from "./ProfileSettings.js";
+import DashboardPage from "./DashboardPage";
+import ContactPage from "./ContactPage";
+import HomeIntro from "./HomeIntro"; // 🔹 NEW: intro/landing page
 
 // Main authenticated content (with app nav bar)
 const MainContent = () => {
@@ -18,12 +20,7 @@ const MainContent = () => {
     <div>
       <NavBar setMenu={setMenu} menu={menu} />
       {/* Use React Router for actual page routing */}
-      {menu === "matcher" ? (
-        <ResumeMatcher />
-      ) : (
-        // Route to /profile with subroutes (see below)
-        <UserProfile />
-      )}
+      {menu === "matcher" ? <ResumeMatcher /> : <DashboardPage />}
     </div>
   );
 };
@@ -33,7 +30,9 @@ function PublicLayout({ children }) {
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-800 via-purple-500 to-blue-400 relative overflow-hidden">
       <PublicNavBar />
-      <div className="w-full flex-1 flex items-center justify-center">{children}</div>
+      <div className="w-full flex-1 flex items-center justify-center">
+        {children}
+      </div>
     </div>
   );
 }
@@ -57,18 +56,27 @@ const App = () => {
     return (
       <Routes>
         <Route path="/" element={<MainContent />} />
-        <Route path="/profile/*" element={
-          <>
-            <NavBar setMenu={() => { }} menu="profile" />
-            <UserProfile />
-          </>
-        } />
-        <Route path="/profile/settings/*" element={
-          <>
-            <NavBar setMenu={() => { }} menu="profile" />
-            <ProfileSetting />
-          </>
-        } />
+        <Route
+          path="/dashboard/*"
+          element={
+            <>
+              <NavBar setMenu={() => {}} menu="dashboard" />
+              <DashboardPage />
+            </>
+          }
+        />
+        <Route
+          path="/dashboard/settings/*"
+          element={
+            <>
+              <NavBar setMenu={() => {}} menu="dashboard" />
+              <ProfileSettings />
+            </>
+          }
+        />
+        {/* If logged in and hit /login or /contact, push back to app */}
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/contact" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
@@ -79,6 +87,15 @@ const App = () => {
     <Routes>
       <Route
         path="/"
+        element={
+          <PublicLayout>
+            <HomeIntro />
+          </PublicLayout>
+        }
+      />
+
+      <Route
+        path="/login"
         element={
           <PublicLayout>
             <Login onSwitch={() => setShowLogin(false)} onLogin={login} />
@@ -109,7 +126,15 @@ const App = () => {
           </PublicLayout>
         }
       />
-      {/* Fallback route */}
+      <Route
+        path="/contact"
+        element={
+          <PublicLayout>
+            <ContactPage />
+          </PublicLayout>
+        }
+      />
+      {/* Any unknown public route → home intro */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

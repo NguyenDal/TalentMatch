@@ -68,13 +68,17 @@ export default function NavBar({ setMenu, menu }) {
                     Job Matching
                 </button>
                 <button
-                    onClick={() => setMenu && setMenu("profile")}
-                    className={`px-4 py-2 rounded-lg font-medium ${menu === "profile"
-                        ? "bg-white text-blue-600 shadow"
-                        : "text-white hover:bg-blue-700 transition"
-                        }`}
+                    onClick={() => {
+                        setMenu && setMenu("dashboard");
+                        navigate("/dashboard");
+                    }}
+                    className={`px-4 py-2 rounded-lg font-medium ${
+                        menu === "profile" || menu === "dashboard"
+                            ? "bg-white text-blue-600 shadow"
+                            : "text-white hover:bg-blue-700 transition"
+                    }`}
                 >
-                    Profile
+                    Dashboard
                 </button>
                 {user && <span className="text-white ml-6">{user?.username}</span>}
                 {user && (

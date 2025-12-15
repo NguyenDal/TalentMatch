@@ -10,7 +10,7 @@ A web app to check how well your resume matches a job description, see detailed 
 - Paste a job description
 - Instantly see a match score and which requirements are met/missing
 - Get smart, tailored Q&A for your application
-- User-friendly, modern interface
+- User-friendly, modern interface with profile + trends
 
 ---
 
@@ -20,16 +20,15 @@ A web app to check how well your resume matches a job description, see detailed 
 - Node.js (v16+ recommended)
 - npm (comes with Node.js)
 - [OpenAI API Key](https://platform.openai.com/)
-
+- (Production) PostgreSQL database (e.g. Railway)
 ---
 
 ## Setup Instructions
 
 ### 1. Clone the Repository
-
-
 git clone https://github.com/NguyenDal/Resume-Matcher.git
 cd Resume-Matcher
+
 ### 2. Backend Setup (FastAPI)
 #### Create and activate a virtual environment
 python -m venv venv
@@ -44,7 +43,7 @@ pip install -r requirements.txt
 
 If you don’t have a requirements.txt, use:
 
-pip install fastapi uvicorn python-dotenv openai PyPDF2 nltk sentence-transformers
+pip install fastapi[all] uvicorn[standard] python-dotenv openai PyPDF2 python-docx SQLAlchemy psycopg2-binary python-multipart passlib[bcrypt] python-jose[cryptography] PyJWT fastapi-mail email-validator boto3 spacy transformers torch
 
 #### Configure environment variables
 Create a .env file in your backend directory with:
@@ -154,6 +153,21 @@ Upgrade pip: pip install --upgrade pip and try again.
     py -m app.check_tables
 
 - You can use the Railway dashboard (or your preferred SQL client) to inspect your tables and data.
+
+- Sometimes you want to inspect the DB directly (see data, run SQL, etc.).
+  On Railway, open your Postgres service and go to:
+  Connect -> Public Network
+
+  You’ll see something like:
+
+    Host: gondola.proxy.rlwy.net
+    Port: 33443
+    Database: railway
+    User: postgres
+    Password: (shown as PGPASSWORD or inside the connection URL)
+
+Open SQL Shell (psql) to type in the details. If everything is correct, you’ll be connected and see:
+railway=#
 
 ##### For SQLite (Local Development):
 

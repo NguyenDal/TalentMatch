@@ -1,6 +1,31 @@
+# --- Core web stack ---
 fastapi[all]
-spaCy
+uvicorn[standard]
+
+# --- Environment & config ---
+python-dotenv
+
+# --- OpenAI / AI features ---
+openai
+spacy
 transformers
 torch
-uvicorn
-pyjwt
+
+# --- File parsing (resume, job description) ---
+PyPDF2
+python-docx
+
+# --- Database & auth ---
+SQLAlchemy
+psycopg2-binary
+python-multipart
+passlib[bcrypt]
+python-jose[cryptography]
+PyJWT
+
+# --- Email & password reset ---
+fastapi-mail
+email-validator
+
+# --- AWS S3 uploads ---
+boto3

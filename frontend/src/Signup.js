@@ -13,6 +13,10 @@ export default function Signup({ onLogin, onSwitch }) {
   const [err, setErr] = useState(""); // State to store any error messages during signup.
   const [loading, setLoading] = useState(false); // State to indicate if the signup process is ongoing.
 
+  // NEW: capture first/last name
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+
   const navigate = useNavigate(); // Hook to programmatically navigate after signup.
 
   // Function to handle the signup form submission.
@@ -25,6 +29,9 @@ export default function Signup({ onLogin, onSwitch }) {
       params.append("username", username); // Add the username to the parameters.
       params.append("email", email); // Add the email to the parameters.
       params.append("password", password); // Add the password to the parameters.
+      // NEW: include first_name and last_name
+      params.append("first_name", firstName);
+      params.append("last_name", lastName);
 
       // Send a POST request to the backend to register the user.
       await axios.post(`${BASE_URL}/register/`, params, {
@@ -78,6 +85,33 @@ export default function Signup({ onLogin, onSwitch }) {
                 autoFocus
               />
             </div>
+
+            {/* NEW: Input field for first name */}
+            <div className="flex items-center border-b border-gray-200 py-2">
+              <FiUser className="text-gray-400 mr-2" />
+              <input
+                type="text"
+                placeholder="First name"
+                className="w-full outline-none border-0 bg-transparent px-1 py-2 text-gray-700"
+                value={firstName}
+                onChange={e => setFirstName(e.target.value)}
+                required
+              />
+            </div>
+
+            {/* NEW: Input field for last name */}
+            <div className="flex items-center border-b border-gray-200 py-2">
+              <FiUser className="text-gray-400 mr-2" />
+              <input
+                type="text"
+                placeholder="Last name"
+                className="w-full outline-none border-0 bg-transparent px-1 py-2 text-gray-700"
+                value={lastName}
+                onChange={e => setLastName(e.target.value)}
+                required
+              />
+            </div>
+
             {/* Input field for email */}
             <div className="flex items-center border-b border-gray-200 py-2">
               <FiMail className="text-gray-400 mr-2" />

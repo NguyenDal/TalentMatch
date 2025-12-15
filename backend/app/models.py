@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Boolean  # 👈 add Boolean
 from app.database import Base
 from datetime import datetime, timedelta
 import secrets
+
 
 class User(Base):
     __tablename__ = "users"
@@ -10,7 +11,7 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    
+
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
 
@@ -20,6 +21,11 @@ class User(Base):
 
     reset_token = Column(String, unique=True, nullable=True, index=True)
     reset_token_expiration = Column(DateTime, nullable=True)
+
+    # FIELDS FOR ACCOUNT SETTINGS / EMAIL VERIFICATION
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verification_code = Column(String, nullable=True)
+    email_verification_expires_at = Column(DateTime, nullable=True)
 
     @property
     def full_name(self) -> str:
@@ -32,11 +38,21 @@ class User(Base):
 
     def verify_reset_token(self, token):
         return (
-            self.reset_token == token and
-            self.reset_token_expiration is not None and
-            datetime.utcnow() < self.reset_token_expiration
+            self.reset_token == token
+            and self.reset_token_expiration is not None
+            and datetime.utcnow() < self.reset_token_expiration
         )
 
     def clear_reset_token(self):
         self.reset_token = None
         self.reset_token_expiration = None
+
+    # HELPER: generate email verification code
+    def generate_email_verification_code(self, expires_in_minutes: int = 20):
+        code = f"{secrets.randbelow(1_000_000):06d}"  # 6-digit zero-padded
+        self.email_verification_code = code
+        self.email_verification_expires_at = datetime.utcnow() + timedelta(
+            minutes=expires_in_minutes
+        )
+        self.email_verified = False
+        return code

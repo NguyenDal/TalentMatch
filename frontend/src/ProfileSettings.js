@@ -87,7 +87,7 @@ function ProfileDetails() {
     } finally {
       try {
         URL.revokeObjectURL(preview);
-      } catch {}
+      } catch { }
     }
   };
 
@@ -148,11 +148,10 @@ function ProfileDetails() {
     <div>
       {msg && (
         <div
-          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium transition-opacity duration-300 ${
-            msgType === "success"
-              ? "bg-green-100 text-green-700 border border-green-300"
-              : "bg-red-100 text-red-700 border border-red-300"
-          }`}
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium transition-opacity duration-300 ${msgType === "success"
+            ? "bg-green-100 text-green-700 border border-green-300"
+            : "bg-red-100 text-red-700 border border-red-300"
+            }`}
         >
           {msg}
         </div>
@@ -249,8 +248,376 @@ function ProfileDetails() {
 }
 
 function AccountSettings() {
-  return <div className="max-w-3xl text-black">Account settings go here (change password, etc).</div>;
+  const { user: authUser, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const [loading, setLoading] = useState(true);
+
+  // Core identity
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
+
+  // Email verification
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [cooldown, setCooldown] = useState(0); // seconds until resend allowed
+
+  // Save / delete state + messages
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [msgType, setMsgType] = useState("success"); // "success" | "error"
+
+  // Helper to show a temporary banner at the top of the page
+  const showMessage = (text, type = "success") => {
+    setMsg(text);
+    setMsgType(type);
+    if (text) {
+      setTimeout(() => {
+        setMsg("");
+      }, 3000);
+    }
+  };
+
+  // Countdown timer for resend button
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => {
+      setCooldown((s) => (s > 1 ? s - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  // Load current account info (username, email, email_verified)
+  useEffect(() => {
+    const fetchAccount = async () => {
+      try {
+        const token = authUser?.token || localStorage.getItem("token");
+        if (!token) throw new Error("Not logged in");
+
+        const res = await axios.get(`${BASE_URL}/me/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        setUsername(res.data.username || "");
+        setEmail(res.data.email || "");
+        setEmailVerified(!!res.data.email_verified);
+      } catch (err) {
+        console.error("Failed to load account settings", err);
+        showMessage("Failed to load account settings.", "error");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAccount();
+  }, [authUser]);
+
+  // Save username + primary email
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    showMessage("");
+
+    try {
+      const token = authUser?.token || localStorage.getItem("token");
+      const form = new FormData();
+      form.append("username", username);
+      form.append("email", email);
+
+      const res = await axios.patch(`${BASE_URL}/account/update/`, form, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Backend tells us whether email changed and if it is verified
+      if (typeof res.data.email_verified === "boolean") {
+        setEmailVerified(res.data.email_verified);
+      }
+
+      if (res.data.email_changed) {
+        showMessage(
+          "Account updated. Don’t forget to send a verification code to your new email.",
+          "success"
+        );
+      } else {
+        showMessage("Account settings updated.", "success");
+      }
+
+    } catch (err) {
+      console.error(err);
+      const detail =
+        err?.response?.data?.detail || "Failed to save account settings.";
+      showMessage(detail, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Explicit "Send code / Resend code" button
+  const handleSendCode = async () => {
+    if (emailVerified) {
+      showMessage("Your email is already verified.", "success");
+      return;
+    }
+    if (!email) {
+      showMessage("Please set a primary email first.", "error");
+      return;
+    }
+    if (cooldown > 0) return;
+
+    setSendingCode(true);
+    showMessage("");
+
+    try {
+      const token = authUser?.token || localStorage.getItem("token");
+      await axios.post(
+        `${BASE_URL}/account/send-verification/`,
+        null,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      setCooldown(60); // 60s cooldown before another send
+      showMessage("Verification code sent. Please check your inbox.", "success");
+    } catch (err) {
+      console.error(err);
+      const detail =
+        err?.response?.data?.detail ||
+        "Failed to send verification code. Please try again.";
+      showMessage(detail, "error");
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  // Verify email with code
+  const handleVerifyEmail = async (e) => {
+    e.preventDefault();
+    if (!verificationCode.trim()) {
+      showMessage("Please enter the verification code.", "error");
+      return;
+    }
+
+    setVerifying(true);
+    showMessage("");
+
+    try {
+      const token = authUser?.token || localStorage.getItem("token");
+      const params = new URLSearchParams();
+      params.append("code", verificationCode.trim());
+
+      const res = await axios.post(
+        `${BASE_URL}/account/verify-email/`,
+        params,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (res.data?.email_verified) {
+        setEmailVerified(true);
+        setVerificationCode("");
+        showMessage("Email verified successfully.", "success");
+      } else {
+        showMessage("Could not verify email.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      const detail =
+        err?.response?.data?.detail ||
+        "Invalid or expired verification code.";
+      showMessage(detail, "error");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // Delete account with confirmation popup
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete your account? This action can't be undone."
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    showMessage("");
+
+    try {
+      const token = authUser?.token || localStorage.getItem("token");
+      await axios.delete(`${BASE_URL}/account/delete/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Log out locally and send user to default page (public "/")
+      logout();
+      navigate("/");
+    } catch (err) {
+      console.error(err);
+      const detail =
+        err?.response?.data?.detail || "Failed to delete account.";
+      showMessage(detail, "error");
+      setDeleting(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="max-w-3xl text-black">Loading account settings…</div>;
+  }
+
+  return (
+    <div className="max-w-3xl text-black">
+      {msg && (
+        <div
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${msgType === "success"
+            ? "bg-green-100 text-green-700 border border-green-300"
+            : "bg-red-100 text-red-700 border border-red-300"
+            }`}
+        >
+          {msg}
+        </div>
+      )}
+
+      {/* 1. Username & primary email (top of page) */}
+      <form className="space-y-8" onSubmit={handleSave}>
+        <section>
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">
+            Account identity
+          </h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Update your username and primary email. We’ll check if they are
+            already in use by another account.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Username */}
+            <div>
+              <label className="block text-gray-700 font-medium mb-1">
+                Username
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Shown on your dashboard and social-style feed.
+              </p>
+            </div>
+
+            {/* Primary email */}
+            <div>
+              <label className="block text-gray-700 font-medium mb-1">
+                Primary email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Used for login, password reset, and important notifications.
+              </p>
+              <div className="mt-1 text-xs">
+                {emailVerified ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
+                    ● Email verified
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
+                    ● Not verified yet
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Save button for identity changes */}
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-md font-bold transition"
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save changes"}
+          </button>
+        </div>
+      </form>
+
+      {/* 2. Email verification code input */}
+      <section className="mt-10 border-t border-gray-200 pt-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+          Verify your email
+        </h3>
+        <p className="text-sm text-gray-600 mb-3">
+          After changing your email, you can send a 6-digit code to the address
+          above. You can also request a new code at any time.
+        </p>
+
+        <form className="space-y-3" onSubmit={handleVerifyEmail}>
+          {/* Code input + Verify button (ENTER will submit this form) */}
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <input
+              type="text"
+              maxLength={6}
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value)}
+              className="w-full sm:w-40 rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black tracking-[0.3em] text-center"
+              placeholder="123456"
+            />
+            <button
+              type="submit"
+              className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-2 rounded-md font-semibold transition"
+              disabled={verifying}
+            >
+              {verifying ? "Verifying..." : "Verify email"}
+            </button>
+          </div>
+
+          {/* Send / resend code BELOW text + verify button */}
+          <button
+            type="button"
+            onClick={handleSendCode}
+            className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 px-4 py-2 rounded-md text-sm font-semibold transition disabled:opacity-60"
+            disabled={sendingCode || cooldown > 0}
+          >
+            {sendingCode
+              ? "Sending..."
+              : cooldown > 0
+                ? `Send again in ${cooldown}s`
+                : "Send verification code"}
+          </button>
+        </form>
+      </section>
+
+
+      {/* 3. Danger zone – delete account */}
+      <section className="mt-10 border-t border-gray-200 pt-6">
+        <h3 className="text-lg font-semibold text-red-600 mb-2">
+          Danger zone
+        </h3>
+        <p className="text-sm text-gray-600 mb-3">
+          Deleting your account will remove your TalentMatch data (profile,
+          matches, and related content). This action can’t be undone.
+        </p>
+        <button
+          type="button"
+          onClick={handleDeleteAccount}
+          className="px-4 py-2 rounded-md border border-red-300 text-red-700 hover:bg-red-50 text-sm font-semibold transition"
+          disabled={deleting}
+        >
+          {deleting ? "Deleting…" : "Delete my account"}
+        </button>
+      </section>
+    </div>
+  );
 }
+
 function Notifications() {
   return <div className="max-w-3xl text-black">Notification settings go here.</div>;
 }

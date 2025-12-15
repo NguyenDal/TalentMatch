@@ -469,6 +469,7 @@ def read_users_me(current_user: User = Depends(get_current_user)):
             "first_name": current_user.first_name,
             "last_name": current_user.last_name,
             "email": current_user.email, 
+            "email_verified": bool(getattr(current_user, "email_verified", False)),
             "profile_image_url": current_user.profile_image_url,
             "profession": current_user.profession,
             "bio": current_user.bio}
@@ -640,3 +641,182 @@ def clear_profile_image(current_user: User = Depends(get_current_user), db: Sess
     current_user.profile_image_url = None
     db.commit()
     return {"ok": True}
+
+# === ACCOUNT SETTINGS ENDPOINTS ===
+
+@app.patch("/account/update/")
+async def update_account(
+    background_tasks: BackgroundTasks,
+    username: str = Form(None),
+    email: str = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update username and/or primary email.
+    - Checks uniqueness.
+    - If email changed, mark as unverified.
+      The user must click "Send verification code" separately to receive a code.
+    """
+    email_changed = False
+
+    # --- Username update ---
+    if username is not None:
+        new_username = username.strip()
+        if new_username and new_username != current_user.username:
+            existing_user = (
+                db.query(User)
+                .filter(User.username == new_username, User.id != current_user.id)
+                .first()
+            )
+            if existing_user:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This username is already taken. Please choose another.",
+                )
+            current_user.username = new_username
+
+    # --- Email update ---
+    if email is not None:
+        new_email = email.strip().lower()
+        if new_email and new_email != current_user.email:
+            existing_email = (
+                db.query(User)
+                .filter(User.email == new_email, User.id != current_user.id)
+                .first()
+            )
+            if existing_email:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This email is already registered. Try logging in instead.",
+                )
+
+            # validate format
+            try:
+                validate_email(new_email)
+            except EmailNotValidError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+
+            # apply new email + mark as unverified, clear any previous code
+            current_user.email = new_email
+            email_changed = True
+
+            # these attrs need to exist on your User model
+            current_user.email_verified = False
+            current_user.email_verification_code = None
+            current_user.email_verification_expires_at = None
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "ok": True,
+        "email_changed": email_changed,
+        "email_verified": bool(getattr(current_user, "email_verified", False)),
+    }
+
+@app.post("/account/send-verification/")
+async def send_verification_email(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Send / resend a 6-digit verification code to the user's current primary email.
+    Can be used even if they didn't just change the email.
+    """
+    email = (current_user.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="No primary email on file.")
+
+    # Optional: block resends if already verified
+    if getattr(current_user, "email_verified", False):
+        raise HTTPException(status_code=400, detail="Email is already verified.")
+
+    # generate verification code – use model helper if present
+    if hasattr(current_user, "generate_email_verification_code"):
+        code = current_user.generate_email_verification_code(expires_in_minutes=20)
+    else:
+        # Fallback: simple 6-digit code
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        current_user.email_verification_code = code
+        current_user.email_verification_expires_at = datetime.utcnow() + timedelta(
+            minutes=20
+        )
+        current_user.email_verified = False
+
+    db.commit()
+    db.refresh(current_user)
+
+    fm = FastMail(conf)
+    message = MessageSchema(
+        subject="Verify your email - TalentMatch",
+        recipients=[email],
+        body=f"""Hi {current_user.username},
+
+Here is your TalentMatch email verification code:
+
+{code}
+
+This code will expire in 20 minutes.
+
+If you did not request this, you can safely ignore this email.
+
+Thanks,
+TalentMatch Team
+""",
+        subtype="plain",
+    )
+    background_tasks.add_task(fm.send_message, message)
+
+    return {"ok": True, "message": "Verification code sent."}
+
+
+@app.post("/account/verify-email/")
+def verify_email_code(
+    code: str = Form(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Verify the user's email with the 6-digit code.
+    """
+    # Ensure fields exist even if DB not migrated yet
+    verification_code = getattr(current_user, "email_verification_code", None)
+    verification_expires_at = getattr(
+        current_user, "email_verification_expires_at", None
+    )
+
+    if not verification_code:
+        raise HTTPException(status_code=400, detail="No verification code on file.")
+
+    if code.strip() != verification_code:
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
+
+    if verification_expires_at and verification_expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Verification code has expired.")
+
+    current_user.email_verified = True
+    current_user.email_verification_code = None
+    current_user.email_verification_expires_at = None
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {"ok": True, "email_verified": True}
+
+
+@app.delete("/account/delete/")
+def delete_account(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Permanently delete the current user's account.
+    Frontend should show a strong confirmation
+    ('Are you sure? This action cannot be undone.')
+    before calling this endpoint.
+    """
+    db.delete(current_user)
+    db.commit()
+    return {"ok": True, "message": "Account deleted."}

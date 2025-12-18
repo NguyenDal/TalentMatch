@@ -634,7 +634,9 @@ function Security() {
   const [loginsError, setLoginsError] = useState("");
 
   // Remote logout state
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   const [loggingOutSessionId, setLoggingOutSessionId] = useState(null);
+  const [loggingOutAll, setLoggingOutAll] = useState(false);
 
   // Messages
   const [msg, setMsg] = useState("");
@@ -686,30 +688,134 @@ function Security() {
     return "Unknown browser";
   };
 
-  // Fetch recent login activity
-  useEffect(() => {
-    const fetchLogins = async () => {
-      try {
-        const token = authUser?.token || localStorage.getItem("token");
-        if (!token) throw new Error("Not logged in");
+  // Fetch recent login activity (also capture currentSessionId)
+  const fetchLogins = async () => {
+    setLoadingLogins(true);
+    setLoginsError("");
 
-        const res = await axios.get(`${BASE_URL}/account/login-activity/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    try {
+      const token = authUser?.token || localStorage.getItem("token");
+      if (!token) throw new Error("Not logged in");
 
-        setLoginEvents(res.data?.events || []);
-      } catch (err) {
-        console.error("Failed to load login activity", err);
-        setLoginsError(
-          err?.response?.data?.detail || "Failed to load login activity."
-        );
-      } finally {
-        setLoadingLogins(false);
+      const res = await axios.get(`${BASE_URL}/account/login-activity/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const events = res.data?.events || [];
+      setLoginEvents(events);
+
+      const currentRow = events.find((ev) => ev.current_session);
+      if (currentRow && currentRow.session_id) {
+        setCurrentSessionId(currentRow.session_id);
       }
-    };
+    } catch (err) {
+      console.error("Failed to load login activity", err);
+      setLoginsError(
+        err?.response?.data?.detail || "Failed to load login activity."
+      );
+    } finally {
+      setLoadingLogins(false);
+    }
+  };
 
+  useEffect(() => {
     fetchLogins();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser]);
+
+  // Handle remote logout of a specific session
+  const handleRemoteLogout = async (sessionId) => {
+    if (!sessionId) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to log out this session?"
+    );
+    if (!confirmed) return;
+
+    try {
+      const token = authUser?.token || localStorage.getItem("token");
+      if (!token) throw new Error("Not logged in");
+
+      setLoggingOutSessionId(sessionId);
+
+      await axios.post(
+        `${BASE_URL}/account/logout-session/`,
+        { session_id: sessionId },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // If we just revoked the same session we are currently using,
+      // clear local auth and redirect to login.
+      if (sessionId === currentSessionId) {
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch (e) {
+          console.error("Failed to clear storage", e);
+        }
+        logout();
+        navigate("/login");
+        return;
+      }
+
+      // Otherwise just refresh the table and stay logged in.
+      showMessage("Session logged out.", "success");
+      await fetchLogins();
+    } catch (err) {
+      console.error("Remote logout failed", err);
+      const detail =
+        err?.response?.data?.detail || "Failed to log out that session.";
+      showMessage(detail, "error");
+    } finally {
+      setLoggingOutSessionId(null);
+    }
+  };
+
+  // Sign out from all devices
+  const handleLogoutAllDevices = async () => {
+    const confirmed = window.confirm(
+      "Sign out from all devices? This will log you out everywhere, including this browser."
+    );
+    if (!confirmed) return;
+
+    try {
+      const token = authUser?.token || localStorage.getItem("token");
+      if (!token) throw new Error("Not logged in");
+
+      setLoggingOutAll(true);
+
+      await axios.post(
+        `${BASE_URL}/account/logout-all-sessions/`,
+        null,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        console.error("Failed to clear storage", e);
+      }
+
+      logout();
+      navigate("/login");
+    } catch (err) {
+      console.error("Logout all devices failed", err);
+      const detail =
+        err?.response?.data?.detail ||
+        "Failed to sign out from all devices.";
+      showMessage(detail, "error");
+    } finally {
+      setLoggingOutAll(false);
+    }
+  };
 
   // Handle change password
   const handleChangePassword = async (e) => {
@@ -758,57 +864,15 @@ function Security() {
     }
   };
 
-  // Handle remote logout for a past session
-  const handleRemoteLogout = async (sessionId) => {
-    if (!sessionId) {
-      showMessage("Unable to log out this session (missing ID).", "error");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Log out this session? This will force that device to sign in again."
-    );
-    if (!confirmed) return;
-
-    try {
-      setLoggingOutSessionId(sessionId);
-      const token = authUser?.token || localStorage.getItem("token");
-      if (!token) throw new Error("Not logged in");
-
-      await axios.post(
-        `${BASE_URL}/account/logout-session/`,
-        { session_id: sessionId },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      showMessage("Session has been logged out.", "success");
-
-      // Remove that session from the list in the UI
-      setLoginEvents((prev) =>
-        prev.filter((ev) => ev.session_id !== sessionId)
-      );
-    } catch (err) {
-      console.error("Failed to log out session", err);
-      const detail =
-        err?.response?.data?.detail || "Failed to log out that session.";
-      showMessage(detail, "error");
-    } finally {
-      setLoggingOutSessionId(null);
-    }
-  };
-
   return (
     <div className="max-w-3xl text-black">
       {msg && (
         <div
-          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${msgType === "success"
-            ? "bg-green-100 text-green-700 border border-green-300"
-            : "bg-red-100 text-red-700 border border-red-300"
-            }`}
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${
+            msgType === "success"
+              ? "bg-green-100 text-green-700 border border-green-300"
+              : "bg-red-100 text-red-700 border border-red-300"
+          }`}
         >
           {msg}
         </div>
@@ -875,12 +939,24 @@ function Security() {
 
       {/* 2. Recent logins */}
       <section className="mb-10 border-t border-gray-200 pt-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">
-          Recent logins
-        </h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Review where your account has been accessed recently.
-        </p>
+        <div className="flex items-center justify-between mb-4 gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Recent logins
+            </h3>
+            <p className="text-sm text-gray-600">
+              Review where your account has been accessed recently.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleLogoutAllDevices}
+            disabled={loggingOutAll}
+            className="inline-flex items-center px-4 py-2 rounded-full border border-red-200 bg-red-50 text-red-700 text-xs sm:text-sm font-semibold hover:bg-red-100 disabled:opacity-50 whitespace-nowrap"
+          >
+            {loggingOutAll ? "Signing out…" : "Sign out from all devices"}
+          </button>
+        </div>
 
         {loadingLogins ? (
           <p className="text-sm text-gray-500">Loading login activity…</p>
@@ -925,8 +1001,8 @@ function Security() {
                         isCurrent
                           ? "bg-blue-50"
                           : idx % 2 === 0
-                            ? "bg-white"
-                            : "bg-gray-50"
+                          ? "bg-white"
+                          : "bg-gray-50"
                       }
                     >
                       <td className="px-4 py-2 text-gray-800">
@@ -946,26 +1022,26 @@ function Security() {
                       </td>
                       <td className="px-4 py-2 text-gray-800">
                         {isCurrent ? (
-                          <span
-                            className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold whitespace-nowrap"
-                          >
+                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold whitespace-nowrap">
                             Current device
                           </span>
-                        ) : (
-                          ev.session_id && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoteLogout(ev.session_id)}
-                              disabled={loggingOutSessionId === ev.session_id}
-                              className="inline-flex items-center px-3 py-1 rounded-full border border-red-200 bg-red-100 text-red-700 text-xs font-semibold hover:bg-red-200 disabled:opacity-50 whitespace-nowrap"
-                            >
-                              {loggingOutSessionId === ev.session_id ? "Logging out…" : "Log out"}
-                            </button>
-                          )
-                        )}
+                        ) : ev.session_id ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleRemoteLogout(ev.session_id)
+                            }
+                            disabled={
+                              loggingOutSessionId === ev.session_id
+                            }
+                            className="inline-flex items-center px-3 py-1 rounded-full border border-red-200 bg-red-100 text-red-700 text-xs font-semibold hover:bg-red-200 disabled:opacity-50 whitespace-nowrap"
+                          >
+                            {loggingOutSessionId === ev.session_id
+                              ? "Logging out..."
+                              : "Log out"}
+                          </button>
+                        ) : null}
                       </td>
-
-
                     </tr>
                   );
                 })}

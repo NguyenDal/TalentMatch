@@ -2,7 +2,7 @@
 from dotenv import load_dotenv
 load_dotenv()  # Load secrets from .env for devs
 from fastapi import BackgroundTasks
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 import PyPDF2
 from docx import Document
@@ -12,13 +12,14 @@ import re
 import json
 from app.s3_utils import upload_file_to_s3
 from uuid import uuid4
+import httpx
 
 # === Database & Auth Imports ===
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 from app.auth import hash_password, verify_password
-from app.models import User
+from app.models import User, LoginEvent, UserSession
 from app.database import get_db
 
 # === JWT Handling ===
@@ -31,6 +32,7 @@ import secrets
 
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from email_validator import validate_email, EmailNotValidError
+from pydantic import BaseModel
 
 # Read email config from .env
 MAIL_USERNAME = os.getenv("MAIL_USERNAME")
@@ -104,6 +106,65 @@ def clean_explanation(text):
     text = re.sub(r'\s{2,}', ' ', text)
     text = re.sub(r'(?<![.?!])\n', '. ', text)
     return text
+
+async def geo_lookup(ip: str) -> str:
+    """
+    Try to resolve an IP address to a city/region/country using a public GeoIP API.
+
+    - For localhost/private IPs, we call the API without specifying an IP, so it
+      uses the server's public IP (works in dev to show e.g. Winnipeg).
+    - For real public IPs (e.g., behind a proxy with X-Forwarded-For), we look
+      up that exact IP.
+    """
+    # Decide which URL to call on ipapi
+    # Local / private IPs -> call /json/ (use server's external IP)
+    if (
+        not ip
+        or ip in {"localhost", "::1"}
+        or ip.startswith("127.")
+        or ip.startswith("10.")
+        or ip.startswith("192.168.")
+        or ip.startswith("172.16.")
+        or ip.startswith("172.17.")
+        or ip.startswith("172.18.")
+        or ip.startswith("172.19.")
+        or ip.startswith("172.20.")
+        or ip.startswith("172.21.")
+        or ip.startswith("172.22.")
+        or ip.startswith("172.23.")
+        or ip.startswith("172.24.")
+        or ip.startswith("172.25.")
+        or ip.startswith("172.26.")
+        or ip.startswith("172.27.")
+        or ip.startswith("172.28.")
+        or ip.startswith("172.29.")
+        or ip.startswith("172.30.")
+        or ip.startswith("172.31.")
+    ):
+        lookup_url = "https://ipapi.co/json/"
+    else:
+        # Public IP: look up that specific client IP
+        lookup_url = f"https://ipapi.co/{ip}/json/"
+
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(lookup_url)
+            if resp.status_code != 200:
+                return "Location unavailable"
+
+            data = resp.json()
+            city = data.get("city")
+            region = data.get("region")
+            country = data.get("country_name")
+
+            parts = [p for p in [city, region, country] if p]
+            if parts:
+                return ", ".join(parts)
+    except Exception:
+        # Fail gracefully if API fails
+        pass
+
+    return "Location unavailable"
 
 # === OPENAI SETUP ===
 
@@ -250,6 +311,12 @@ def generate_profile_trends(profession, bio):
 
     return trends[:10]
 
+# ---- Pydantic models for security endpoints ----
+
+class LogoutSessionRequest(BaseModel):
+    """Payload to 'log out' a past session by its session_id."""
+    session_id: str
+
 # === FASTAPI APPLICATION SETUP ===
 
 app = FastAPI()
@@ -393,19 +460,21 @@ def register_user(
 # === USER LOGIN ENDPOINT ===
 
 @app.post("/login/")
-def login(
+async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    remember: bool = Form(False),  # <-- add remember flag from form
-    db: Session = Depends(get_db)
+    remember: bool = Form(False),
+    db: Session = Depends(get_db),
 ):
     """
     Login with either username or email.
     Returns a JWT token and basic user info on success.
+    Also records a login event (active session with session_id).
     """
     user = db.query(User).filter(
         or_(
             User.email == form_data.username,
-            User.username == form_data.username
+            User.username == form_data.username,
         )
     ).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -413,23 +482,55 @@ def login(
 
     SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret")
     ALGORITHM = "HS256"
+
+    # --- create session id + token expiry ---
+    session_id = secrets.token_urlsafe(32)
+
+    # short vs long expiry (you can tweak durations)
+    if remember:
+        exp = datetime.utcnow() + timedelta(days=30)
+    else:
+        exp = datetime.utcnow() + timedelta(days=1)
+
     payload = {
         "sub": user.username,
         "user_id": user.id,
         "email": user.email,
         "username": user.username,
+        "sid": session_id,  # <- important: link JWT to a login_events row
+        "exp": exp,
     }
-    # If remember is unchecked => 1 day expiry; if checked => no exp (treated as non-expiring by frontend)
-    if not remember:
-        payload["exp"] = datetime.utcnow() + timedelta(days=1)
 
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    # --- capture client info ---
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    if x_forwarded_for:
+        client_ip = x_forwarded_for.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else "Unknown"
+
+    user_agent = request.headers.get("user-agent", "Unknown device")
+    location = await geo_lookup(client_ip)
+
+    # --- store as an ACTIVE session in login_events ---
+    login_event = LoginEvent(
+        user_id=user.id,
+        ip=client_ip,
+        user_agent=user_agent,
+        location=location,
+        session_id=session_id,
+        active=True,
+    )
+    db.add(login_event)
+    db.commit()
+
     return {
         "access_token": token,
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.username,
-        "email": user.email
+        "email": user.email,
     }
 
 # === JWT-Protected User Info Endpoint ===
@@ -438,10 +539,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 ALGORITHM = "HS256"
 SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret")
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
     """
-    Decode the JWT token, find the user, and return the user object.
-    Used for endpoints that require login.
+    Decode JWT, find user, and ensure the associated login_events row is still active.
+    If the session is revoked or token is invalid/expired, raise 401.
     """
     credentials_exception = HTTPException(
         status_code=401,
@@ -451,11 +556,29 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
+        sid: str | None = payload.get("sid")
+
         if username is None:
             raise credentials_exception
+
         user = db.query(User).filter(User.username == username).first()
         if user is None:
             raise credentials_exception
+
+        # If we have a session id, make sure this session is still active
+        if sid:
+            session_row = (
+                db.query(LoginEvent)
+                .filter(
+                    LoginEvent.user_id == user.id,
+                    LoginEvent.session_id == sid,
+                )
+                .first()
+            )
+            if session_row is None or not session_row.active:
+                # session was revoked / deleted
+                raise credentials_exception
+
         return user
     except JWTError:
         raise credentials_exception
@@ -463,16 +586,18 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @app.get("/me/")
 def read_users_me(current_user: User = Depends(get_current_user)):
     """Get details about the currently logged-in user (JWT required)."""
-    return {"id": current_user.id, 
-            "username": current_user.username, 
-            "full_name": current_user.full_name, 
-            "first_name": current_user.first_name,
-            "last_name": current_user.last_name,
-            "email": current_user.email, 
-            "email_verified": bool(getattr(current_user, "email_verified", False)),
-            "profile_image_url": current_user.profile_image_url,
-            "profession": current_user.profession,
-            "bio": current_user.bio}
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "email": current_user.email,
+        "email_verified": bool(getattr(current_user, "email_verified", False)),
+        "profile_image_url": current_user.profile_image_url,
+        "profession": current_user.profession,
+        "bio": current_user.bio,
+    }
 
 # --- PROFILE TRENDS ENDPOINT ---
 
@@ -805,6 +930,154 @@ def verify_email_code(
 
     return {"ok": True, "email_verified": True}
 
+# --- SECURITY: Change password while logged in ---
+
+@app.post("/account/change-password/")
+def change_password(
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Change the user's password while logged in.
+    Requires the current password and a new password.
+    """
+    # Verify current password
+    if not verify_password(current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect.")
+
+    # Basic new password checks
+    if len(new_password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be at least 8 characters long.",
+        )
+
+    if verify_password(new_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be different from the current password.",
+        )
+
+    # Save new password
+    current_user.hashed_password = hash_password(new_password)
+    db.commit()
+    db.refresh(current_user)
+
+    return {"ok": True, "message": "Password changed successfully."}
+
+# --- SECURITY: Recent login activity (stub) ---
+
+@app.get("/account/login-activity/")
+async def get_login_activity(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Return recent *active* login sessions for the user.
+    Only login_events rows with active = True are shown.
+    Very old sessions are filtered out by timestamp.
+    """
+    # Get current session id from the Authorization header
+    auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
+    current_sid = None
+    if auth_header and auth_header.lower().startswith("bearer "):
+        raw_token = auth_header.split(" ", 1)[1]
+        try:
+            payload = jwt.decode(raw_token, SECRET_KEY, algorithms=[ALGORITHM])
+            current_sid = payload.get("sid")
+        except JWTError:
+            current_sid = None
+
+    now = datetime.utcnow()
+    # treat sessions older than 30 days as "expired" for display purposes
+    cutoff = now - timedelta(days=30)
+
+    active_events = (
+        db.query(LoginEvent)
+        .filter(
+            LoginEvent.user_id == current_user.id,
+            LoginEvent.active == True,          # only active sessions
+            LoginEvent.timestamp >= cutoff,     # hide very old ones
+        )
+        .order_by(LoginEvent.timestamp.desc())
+        .all()
+    )
+
+    events = []
+    for ev in active_events:
+        events.append({
+            "timestamp": ev.timestamp.isoformat() + "Z",
+            "ip": ev.ip,
+            "device": ev.user_agent,
+            "location": ev.location or "Location unavailable",
+            "current_session": (ev.session_id == current_sid),
+            "session_id": ev.session_id,
+        })
+
+    return {"events": events}
+
+
+# --- SECURITY: 'Log out' a past session (history only) ---
+
+@app.post("/account/logout-session/")
+def logout_session(
+    body: LogoutSessionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Mark a specific login_events row as inactive.
+    Frontend passes {"session_id": "..."}.
+    """
+    session_row = (
+        db.query(LoginEvent)
+        .filter(
+            LoginEvent.user_id == current_user.id,
+            LoginEvent.session_id == body.session_id,
+        )
+        .first()
+    )
+
+    if not session_row:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    if not session_row.active:
+        return {"ok": True, "message": "Session already logged out."}
+
+    session_row.active = False
+    db.commit()
+
+    return {"ok": True, "message": "Session logged out."}
+
+@app.post("/account/logout-all-sessions/")
+def logout_all_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Log out the current user from ALL devices/browsers.
+
+    - Marks all their sessions as inactive (or deletes them).
+    - Frontend should then clear the local token and redirect to /login.
+    """
+    # Revoke all rows in user_sessions for this user (if table used)
+    # Note: UserSession model uses 'revoked' flag instead of 'active'
+    (
+        db.query(UserSession)
+        .filter(UserSession.user_id == current_user.id)
+        .update({"revoked": True}, synchronize_session=False)
+    )
+
+    # Optional: also mark related login_events as inactive, if you use that flag
+    db.query(LoginEvent).filter(LoginEvent.user_id == current_user.id).update(
+        {"active": False}, synchronize_session=False
+    )
+
+    db.commit()
+    return {"ok": True, "message": "All sessions logged out."}
 
 @app.delete("/account/delete/")
 def delete_account(

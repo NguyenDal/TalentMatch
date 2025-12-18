@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean  # 👈 add Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text
 from app.database import Base
 from datetime import datetime, timedelta
 import secrets
@@ -56,3 +56,46 @@ class User(Base):
         )
         self.email_verified = False
         return code
+
+class LoginEvent(Base):
+    __tablename__ = "login_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+
+    # When this login happened
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Basic device info
+    ip = Column(String(45))
+    user_agent = Column(Text)
+    location = Column(String(255))
+
+    # Session info
+    session_id = Column(String, nullable=False, unique=True)
+    active = Column(Boolean, default=True, nullable=False)
+
+class UserSession(Base):
+    """
+    Tracks active login sessions so we can:
+      - show only active sessions in 'Recent logins'
+      - remotely revoke a specific session
+      - reject requests from revoked/expired sessions
+    """
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+
+    # Random identifier for this session (stored in JWT as 'sid')
+    session_id = Column(String, unique=True, index=True, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+
+    revoked = Column(Boolean, default=False, nullable=False)
+
+    # Optional device info
+    ip = Column(String(45))
+    user_agent = Column(Text)
+    location = Column(String(255))

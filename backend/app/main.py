@@ -32,6 +32,7 @@ import secrets
 
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from email_validator import validate_email, EmailNotValidError
+from pydantic import BaseModel
 
 # Read email config from .env
 MAIL_USERNAME = os.getenv("MAIL_USERNAME")
@@ -310,6 +311,12 @@ def generate_profile_trends(profession, bio):
 
     return trends[:10]
 
+# ---- Pydantic models for security endpoints ----
+
+class LogoutSessionRequest(BaseModel):
+    """Payload to 'log out' a past session by its session_id."""
+    session_id: str
+
 # === FASTAPI APPLICATION SETUP ===
 
 app = FastAPI()
@@ -473,6 +480,9 @@ async def login(
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect username/email or password")
 
+    # NEW: per-session ID for remote logout
+    session_id = secrets.token_urlsafe(16)
+
     # Build JWT payload
     SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret")
     ALGORITHM = "HS256"
@@ -481,6 +491,7 @@ async def login(
         "user_id": user.id,
         "email": user.email,
         "username": user.username,
+        "sid": session_id,  # <-- important
     }
     if not remember:
         payload["exp"] = datetime.utcnow() + timedelta(days=1)
@@ -502,6 +513,8 @@ async def login(
         ip=client_ip,
         user_agent=user_agent,
         location=location,
+        session_id=session_id,
+        active=True,
     )
     db.add(login_event)
     db.commit()
@@ -522,7 +535,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret")
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """
-    Decode the JWT token, find the user, and return the user object.
+    Decode the JWT token, find the user, and ensure the session is still active.
     Used for endpoints that require login.
     """
     credentials_exception = HTTPException(
@@ -533,11 +546,30 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
+        session_id: str = payload.get("sid")
+
         if username is None:
             raise credentials_exception
+
         user = db.query(User).filter(User.username == username).first()
         if user is None:
             raise credentials_exception
+
+        # If the token has a session id, verify it's still active
+        if session_id:
+            active_session = (
+                db.query(LoginEvent)
+                .filter(
+                    LoginEvent.user_id == user.id,
+                    LoginEvent.session_id == session_id,
+                    LoginEvent.active == True,
+                )
+                .first()
+            )
+            if active_session is None:
+                # Session was revoked or never existed
+                raise credentials_exception
+
         return user
     except JWTError:
         raise credentials_exception
@@ -931,6 +963,7 @@ def change_password(
 @app.get("/account/login-activity/")
 async def get_login_activity(
     request: Request,
+    token: str = Depends(oauth2_scheme),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -940,7 +973,14 @@ async def get_login_activity(
     - First row: current session (built from the request)
     - Next rows: last 5 stored login events (most recent first)
     """
-    # Current session info
+    # Decode token to get current session_id
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        current_sid = payload.get("sid")
+    except JWTError:
+        current_sid = None
+
+    # Current session info (doesn't come from DB)
     x_forwarded_for = request.headers.get("x-forwarded-for")
     if x_forwarded_for:
         client_ip = x_forwarded_for.split(",")[0].strip()
@@ -959,16 +999,19 @@ async def get_login_activity(
         "device": user_agent,
         "location": location,
         "current_session": True,
+        "session_id": current_sid,
     })
 
-    # Last 5 login events from history (excluding "current" row)
-    history = (
+    # Last 5 login events from history (excluding current session, if known)
+    query = (
         db.query(LoginEvent)
         .filter(LoginEvent.user_id == current_user.id)
         .order_by(LoginEvent.timestamp.desc())
-        .limit(5)
-        .all()
     )
+    if current_sid:
+        query = query.filter(LoginEvent.session_id != current_sid)
+
+    history = query.limit(5).all()
 
     for ev in history:
         events.append({
@@ -977,9 +1020,45 @@ async def get_login_activity(
             "device": ev.user_agent,
             "location": ev.location or "Location unavailable",
             "current_session": False,
+            "session_id": ev.session_id,
         })
 
     return {"events": events}
+
+
+# --- SECURITY: 'Log out' a past session (history only) ---
+
+@app.post("/account/logout-session/")
+def logout_past_session(
+    payload: LogoutSessionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Remotely log out a past session by marking it inactive.
+    Any future requests using that JWT will fail.
+
+    This does NOT log out your *current* device; it is for other sessions.
+    """
+    session_id = (payload.session_id or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Missing session_id")
+
+    ev = (
+        db.query(LoginEvent)
+        .filter(
+            LoginEvent.user_id == current_user.id,
+            LoginEvent.session_id == session_id,
+        )
+        .first()
+    )
+
+    if not ev:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    ev.active = False
+    db.commit()
+    return {"ok": True, "message": "Session has been logged out remotely."}
 
 @app.delete("/account/delete/")
 def delete_account(

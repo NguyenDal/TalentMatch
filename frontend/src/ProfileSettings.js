@@ -87,7 +87,7 @@ function ProfileDetails() {
     } finally {
       try {
         URL.revokeObjectURL(preview);
-      } catch {}
+      } catch { }
     }
   };
 
@@ -148,11 +148,10 @@ function ProfileDetails() {
     <div>
       {msg && (
         <div
-          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium transition-opacity duration-300 ${
-            msgType === "success"
-              ? "bg-green-100 text-green-700 border border-green-300"
-              : "bg-red-100 text-red-700 border border-red-300"
-          }`}
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium transition-opacity duration-300 ${msgType === "success"
+            ? "bg-green-100 text-green-700 border border-green-300"
+            : "bg-red-100 text-red-700 border border-red-300"
+            }`}
         >
           {msg}
         </div>
@@ -469,11 +468,10 @@ function AccountSettings() {
     <div className="max-w-3xl text-black">
       {msg && (
         <div
-          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${
-            msgType === "success"
-              ? "bg-green-100 text-green-700 border border-green-300"
-              : "bg-red-100 text-red-700 border border-red-300"
-          }`}
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${msgType === "success"
+            ? "bg-green-100 text-green-700 border border-green-300"
+            : "bg-red-100 text-red-700 border border-red-300"
+            }`}
         >
           {msg}
         </div>
@@ -588,8 +586,8 @@ function AccountSettings() {
             {sendingCode
               ? "Sending..."
               : cooldown > 0
-              ? `Send again in ${cooldown}s`
-              : "Send verification code"}
+                ? `Send again in ${cooldown}s`
+                : "Send verification code"}
           </button>
         </form>
       </section>
@@ -634,6 +632,9 @@ function Security() {
   const [loginEvents, setLoginEvents] = useState([]);
   const [loadingLogins, setLoadingLogins] = useState(true);
   const [loginsError, setLoginsError] = useState("");
+
+  // Remote logout state
+  const [loggingOutSessionId, setLoggingOutSessionId] = useState(null);
 
   // Messages
   const [msg, setMsg] = useState("");
@@ -757,15 +758,57 @@ function Security() {
     }
   };
 
+  // Handle remote logout for a past session
+  const handleRemoteLogout = async (sessionId) => {
+    if (!sessionId) {
+      showMessage("Unable to log out this session (missing ID).", "error");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Log out this session? This will force that device to sign in again."
+    );
+    if (!confirmed) return;
+
+    try {
+      setLoggingOutSessionId(sessionId);
+      const token = authUser?.token || localStorage.getItem("token");
+      if (!token) throw new Error("Not logged in");
+
+      await axios.post(
+        `${BASE_URL}/account/logout-session/`,
+        { session_id: sessionId },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      showMessage("Session has been logged out.", "success");
+
+      // Remove that session from the list in the UI
+      setLoginEvents((prev) =>
+        prev.filter((ev) => ev.session_id !== sessionId)
+      );
+    } catch (err) {
+      console.error("Failed to log out session", err);
+      const detail =
+        err?.response?.data?.detail || "Failed to log out that session.";
+      showMessage(detail, "error");
+    } finally {
+      setLoggingOutSessionId(null);
+    }
+  };
+
   return (
     <div className="max-w-3xl text-black">
       {msg && (
         <div
-          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${
-            msgType === "success"
-              ? "bg-green-100 text-green-700 border border-green-300"
-              : "bg-red-100 text-red-700 border border-red-300"
-          }`}
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${msgType === "success"
+            ? "bg-green-100 text-green-700 border border-green-300"
+            : "bg-red-100 text-red-700 border border-red-300"
+            }`}
         >
           {msg}
         </div>
@@ -882,8 +925,8 @@ function Security() {
                         isCurrent
                           ? "bg-blue-50"
                           : idx % 2 === 0
-                          ? "bg-white"
-                          : "bg-gray-50"
+                            ? "bg-white"
+                            : "bg-gray-50"
                       }
                     >
                       <td className="px-4 py-2 text-gray-800">
@@ -903,15 +946,26 @@ function Security() {
                       </td>
                       <td className="px-4 py-2 text-gray-800">
                         {isCurrent ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold">
+                          <span
+                            className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold whitespace-nowrap"
+                          >
                             Current device
                           </span>
                         ) : (
-                          <span className="text-xs text-gray-600">
-                            Past session
-                          </span>
+                          ev.session_id && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoteLogout(ev.session_id)}
+                              disabled={loggingOutSessionId === ev.session_id}
+                              className="inline-flex items-center px-3 py-1 rounded-full border border-red-200 bg-red-100 text-red-700 text-xs font-semibold hover:bg-red-200 disabled:opacity-50 whitespace-nowrap"
+                            >
+                              {loggingOutSessionId === ev.session_id ? "Logging out…" : "Log out"}
+                            </button>
+                          )
                         )}
                       </td>
+
+
                     </tr>
                   );
                 })}

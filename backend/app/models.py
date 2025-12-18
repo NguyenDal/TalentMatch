@@ -70,3 +70,7 @@ class LoginEvent(Base):
     ip = Column(String(45))
     user_agent = Column(Text)
     location = Column(String(255))
+
+    # Session info
+    session_id = Column(String, index=True, nullable=False)
+    active = Column(Boolean, default=True, nullable=False)

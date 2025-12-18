@@ -2,7 +2,7 @@
 from dotenv import load_dotenv
 load_dotenv()  # Load secrets from .env for devs
 from fastapi import BackgroundTasks
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 import PyPDF2
 from docx import Document
@@ -12,13 +12,14 @@ import re
 import json
 from app.s3_utils import upload_file_to_s3
 from uuid import uuid4
+import httpx
 
 # === Database & Auth Imports ===
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 from app.auth import hash_password, verify_password
-from app.models import User
+from app.models import User, LoginEvent
 from app.database import get_db
 
 # === JWT Handling ===
@@ -104,6 +105,65 @@ def clean_explanation(text):
     text = re.sub(r'\s{2,}', ' ', text)
     text = re.sub(r'(?<![.?!])\n', '. ', text)
     return text
+
+async def geo_lookup(ip: str) -> str:
+    """
+    Try to resolve an IP address to a city/region/country using a public GeoIP API.
+
+    - For localhost/private IPs, we call the API without specifying an IP, so it
+      uses the server's public IP (works in dev to show e.g. Winnipeg).
+    - For real public IPs (e.g., behind a proxy with X-Forwarded-For), we look
+      up that exact IP.
+    """
+    # Decide which URL to call on ipapi
+    # Local / private IPs -> call /json/ (use server's external IP)
+    if (
+        not ip
+        or ip in {"localhost", "::1"}
+        or ip.startswith("127.")
+        or ip.startswith("10.")
+        or ip.startswith("192.168.")
+        or ip.startswith("172.16.")
+        or ip.startswith("172.17.")
+        or ip.startswith("172.18.")
+        or ip.startswith("172.19.")
+        or ip.startswith("172.20.")
+        or ip.startswith("172.21.")
+        or ip.startswith("172.22.")
+        or ip.startswith("172.23.")
+        or ip.startswith("172.24.")
+        or ip.startswith("172.25.")
+        or ip.startswith("172.26.")
+        or ip.startswith("172.27.")
+        or ip.startswith("172.28.")
+        or ip.startswith("172.29.")
+        or ip.startswith("172.30.")
+        or ip.startswith("172.31.")
+    ):
+        lookup_url = "https://ipapi.co/json/"
+    else:
+        # Public IP: look up that specific client IP
+        lookup_url = f"https://ipapi.co/{ip}/json/"
+
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(lookup_url)
+            if resp.status_code != 200:
+                return "Location unavailable"
+
+            data = resp.json()
+            city = data.get("city")
+            region = data.get("region")
+            country = data.get("country_name")
+
+            parts = [p for p in [city, region, country] if p]
+            if parts:
+                return ", ".join(parts)
+    except Exception:
+        # Fail gracefully if API fails
+        pass
+
+    return "Location unavailable"
 
 # === OPENAI SETUP ===
 
@@ -393,14 +453,16 @@ def register_user(
 # === USER LOGIN ENDPOINT ===
 
 @app.post("/login/")
-def login(
+async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    remember: bool = Form(False),  # <-- add remember flag from form
-    db: Session = Depends(get_db)
+    remember: bool = Form(False),
+    db: Session = Depends(get_db),
 ):
     """
     Login with either username or email.
     Returns a JWT token and basic user info on success.
+    Also records a login event for history.
     """
     user = db.query(User).filter(
         or_(
@@ -411,6 +473,7 @@ def login(
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect username/email or password")
 
+    # Build JWT payload
     SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret")
     ALGORITHM = "HS256"
     payload = {
@@ -419,17 +482,36 @@ def login(
         "email": user.email,
         "username": user.username,
     }
-    # If remember is unchecked => 1 day expiry; if checked => no exp (treated as non-expiring by frontend)
     if not remember:
         payload["exp"] = datetime.utcnow() + timedelta(days=1)
 
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    # --- Record login event ---
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    if x_forwarded_for:
+        client_ip = x_forwarded_for.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else "Unknown"
+
+    user_agent = request.headers.get("user-agent", "Unknown device")
+    location = await geo_lookup(client_ip)
+
+    login_event = LoginEvent(
+        user_id=user.id,
+        ip=client_ip,
+        user_agent=user_agent,
+        location=location,
+    )
+    db.add(login_event)
+    db.commit()
+
     return {
         "access_token": token,
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.username,
-        "email": user.email
+        "email": user.email,
     }
 
 # === JWT-Protected User Info Endpoint ===
@@ -463,16 +545,18 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @app.get("/me/")
 def read_users_me(current_user: User = Depends(get_current_user)):
     """Get details about the currently logged-in user (JWT required)."""
-    return {"id": current_user.id, 
-            "username": current_user.username, 
-            "full_name": current_user.full_name, 
-            "first_name": current_user.first_name,
-            "last_name": current_user.last_name,
-            "email": current_user.email, 
-            "email_verified": bool(getattr(current_user, "email_verified", False)),
-            "profile_image_url": current_user.profile_image_url,
-            "profession": current_user.profession,
-            "bio": current_user.bio}
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "email": current_user.email,
+        "email_verified": bool(getattr(current_user, "email_verified", False)),
+        "profile_image_url": current_user.profile_image_url,
+        "profession": current_user.profession,
+        "bio": current_user.bio,
+    }
 
 # --- PROFILE TRENDS ENDPOINT ---
 
@@ -805,6 +889,97 @@ def verify_email_code(
 
     return {"ok": True, "email_verified": True}
 
+# --- SECURITY: Change password while logged in ---
+
+@app.post("/account/change-password/")
+def change_password(
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Change the user's password while logged in.
+    Requires the current password and a new password.
+    """
+    # Verify current password
+    if not verify_password(current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect.")
+
+    # Basic new password checks
+    if len(new_password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be at least 8 characters long.",
+        )
+
+    if verify_password(new_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be different from the current password.",
+        )
+
+    # Save new password
+    current_user.hashed_password = hash_password(new_password)
+    db.commit()
+    db.refresh(current_user)
+
+    return {"ok": True, "message": "Password changed successfully."}
+
+# --- SECURITY: Recent login activity (stub) ---
+
+@app.get("/account/login-activity/")
+async def get_login_activity(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Return recent login activity for the user.
+
+    - First row: current session (built from the request)
+    - Next rows: last 5 stored login events (most recent first)
+    """
+    # Current session info
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    if x_forwarded_for:
+        client_ip = x_forwarded_for.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else "Unknown"
+
+    user_agent = request.headers.get("user-agent", "Unknown device")
+    location = await geo_lookup(client_ip)
+
+    events = []
+
+    # Current session row (for the blue "Current device" pill)
+    events.append({
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "ip": client_ip,
+        "device": user_agent,
+        "location": location,
+        "current_session": True,
+    })
+
+    # Last 5 login events from history (excluding "current" row)
+    history = (
+        db.query(LoginEvent)
+        .filter(LoginEvent.user_id == current_user.id)
+        .order_by(LoginEvent.timestamp.desc())
+        .limit(5)
+        .all()
+    )
+
+    for ev in history:
+        events.append({
+            "timestamp": ev.timestamp.isoformat() + "Z",
+            "ip": ev.ip,
+            "device": ev.user_agent,
+            "location": ev.location or "Location unavailable",
+            "current_session": False,
+        })
+
+    return {"events": events}
 
 @app.delete("/account/delete/")
 def delete_account(

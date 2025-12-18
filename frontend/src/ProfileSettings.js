@@ -87,7 +87,7 @@ function ProfileDetails() {
     } finally {
       try {
         URL.revokeObjectURL(preview);
-      } catch { }
+      } catch {}
     }
   };
 
@@ -148,10 +148,11 @@ function ProfileDetails() {
     <div>
       {msg && (
         <div
-          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium transition-opacity duration-300 ${msgType === "success"
-            ? "bg-green-100 text-green-700 border border-green-300"
-            : "bg-red-100 text-red-700 border border-red-300"
-            }`}
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium transition-opacity duration-300 ${
+            msgType === "success"
+              ? "bg-green-100 text-green-700 border border-green-300"
+              : "bg-red-100 text-red-700 border border-red-300"
+          }`}
         >
           {msg}
         </div>
@@ -225,7 +226,9 @@ function ProfileDetails() {
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-gray-700 font-medium mb-1">Preferred job titles</label>
+          <label className="block text-gray-700 font-medium mb-1">
+            Preferred job titles
+          </label>
           <textarea
             rows={3}
             value={bio}
@@ -344,7 +347,6 @@ function AccountSettings() {
       } else {
         showMessage("Account settings updated.", "success");
       }
-
     } catch (err) {
       console.error(err);
       const detail =
@@ -372,13 +374,9 @@ function AccountSettings() {
 
     try {
       const token = authUser?.token || localStorage.getItem("token");
-      await axios.post(
-        `${BASE_URL}/account/send-verification/`,
-        null,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await axios.post(`${BASE_URL}/account/send-verification/`, null, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       setCooldown(60); // 60s cooldown before another send
       showMessage("Verification code sent. Please check your inbox.", "success");
@@ -471,10 +469,11 @@ function AccountSettings() {
     <div className="max-w-3xl text-black">
       {msg && (
         <div
-          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${msgType === "success"
-            ? "bg-green-100 text-green-700 border border-green-300"
-            : "bg-red-100 text-red-700 border border-red-300"
-            }`}
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${
+            msgType === "success"
+              ? "bg-green-100 text-green-700 border border-green-300"
+              : "bg-red-100 text-red-700 border border-red-300"
+          }`}
         >
           {msg}
         </div>
@@ -589,12 +588,11 @@ function AccountSettings() {
             {sendingCode
               ? "Sending..."
               : cooldown > 0
-                ? `Send again in ${cooldown}s`
-                : "Send verification code"}
+              ? `Send again in ${cooldown}s`
+              : "Send verification code"}
           </button>
         </form>
       </section>
-
 
       {/* 3. Danger zone – delete account */}
       <section className="mt-10 border-t border-gray-200 pt-6">
@@ -621,8 +619,338 @@ function AccountSettings() {
 function Notifications() {
   return <div className="max-w-3xl text-black">Notification settings go here.</div>;
 }
+
 function Security() {
-  return <div className="max-w-3xl text-black">Security settings go here (2FA, etc).</div>;
+  const { user: authUser, logout } = useAuth();
+  const navigate = useNavigate();
+
+  // Change password state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPw, setChangingPw] = useState(false);
+
+  // Login activity state
+  const [loginEvents, setLoginEvents] = useState([]);
+  const [loadingLogins, setLoadingLogins] = useState(true);
+  const [loginsError, setLoginsError] = useState("");
+
+  // Messages
+  const [msg, setMsg] = useState("");
+  const [msgType, setMsgType] = useState("success"); // success | error
+
+  const showMessage = (text, type = "success") => {
+    setMsg(text);
+    setMsgType(type);
+    if (text) {
+      setTimeout(() => setMsg(""), 3000);
+    }
+  };
+
+  // --- Helpers for login table ---
+
+  const formatLoginTime = (ts) => {
+    if (!ts) return "—";
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return ts; // fallback if not a valid date
+    return d.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  };
+
+  const getOSNameFromUserAgent = (ua = "") => {
+    const s = ua.toLowerCase();
+    if (s.includes("windows")) return "Windows PC";
+    if (s.includes("mac os x") || s.includes("macintosh")) return "Mac";
+    if (s.includes("iphone") || s.includes("ipad") || s.includes("ipod"))
+      return "iPhone / iPad";
+    if (s.includes("android")) return "Android";
+    if (s.includes("linux")) return "Linux";
+    return "Unknown device";
+  };
+
+  const getBrowserNameFromUserAgent = (ua = "") => {
+    const s = ua.toLowerCase();
+    if (s.includes("edg/")) return "Microsoft Edge";
+    if (s.includes("opr/") || s.includes("opera")) return "Opera";
+    if (s.includes("chrome/") && !s.includes("edg/") && !s.includes("opr/"))
+      return "Google Chrome";
+    if (s.includes("safari") && !s.includes("chrome")) return "Safari";
+    if (s.includes("firefox")) return "Mozilla Firefox";
+    return "Unknown browser";
+  };
+
+  // Fetch recent login activity
+  useEffect(() => {
+    const fetchLogins = async () => {
+      try {
+        const token = authUser?.token || localStorage.getItem("token");
+        if (!token) throw new Error("Not logged in");
+
+        const res = await axios.get(`${BASE_URL}/account/login-activity/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        setLoginEvents(res.data?.events || []);
+      } catch (err) {
+        console.error("Failed to load login activity", err);
+        setLoginsError(
+          err?.response?.data?.detail || "Failed to load login activity."
+        );
+      } finally {
+        setLoadingLogins(false);
+      }
+    };
+
+    fetchLogins();
+  }, [authUser]);
+
+  // Handle change password
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showMessage("Please fill in all password fields.", "error");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showMessage("New password and confirmation do not match.", "error");
+      return;
+    }
+
+    setChangingPw(true);
+    showMessage("");
+
+    try {
+      const token = authUser?.token || localStorage.getItem("token");
+      const form = new FormData();
+      form.append("current_password", currentPassword);
+      form.append("new_password", newPassword);
+
+      const res = await axios.post(
+        `${BASE_URL}/account/change-password/`,
+        form,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      showMessage(
+        res.data?.message || "Password changed successfully.",
+        "success"
+      );
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      console.error(err);
+      const detail =
+        err?.response?.data?.detail || "Failed to change password.";
+      showMessage(detail, "error");
+    } finally {
+      setChangingPw(false);
+    }
+  };
+
+  return (
+    <div className="max-w-3xl text-black">
+      {msg && (
+        <div
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${
+            msgType === "success"
+              ? "bg-green-100 text-green-700 border border-green-300"
+              : "bg-red-100 text-red-700 border border-red-300"
+          }`}
+        >
+          {msg}
+        </div>
+      )}
+
+      {/* 1. Change password */}
+      <section className="mb-10">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+          Change password
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Update your password to keep your account secure.
+        </p>
+
+        <form className="space-y-4" onSubmit={handleChangePassword}>
+          <div>
+            <label className="block text-gray-700 font-medium mb-1">
+              Current password
+            </label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 font-medium mb-1">
+                New password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 font-medium mb-1">
+                Confirm new password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-2 rounded-md font-semibold transition"
+              disabled={changingPw}
+            >
+              {changingPw ? "Updating..." : "Update password"}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      {/* 2. Recent logins */}
+      <section className="mb-10 border-t border-gray-200 pt-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+          Recent logins
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Review where your account has been accessed recently.
+        </p>
+
+        {loadingLogins ? (
+          <p className="text-sm text-gray-500">Loading login activity…</p>
+        ) : loginsError ? (
+          <p className="text-sm text-red-600">{loginsError}</p>
+        ) : loginEvents.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No login activity found yet.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm border border-gray-200 rounded-md overflow-hidden">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                    Date &amp; time
+                  </th>
+                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                    IP address
+                  </th>
+                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                    Operating system
+                  </th>
+                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                    Browser
+                  </th>
+                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                    Location
+                  </th>
+                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                    Session
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {loginEvents.map((ev, idx) => {
+                  const isCurrent = !!ev.current_session;
+                  return (
+                    <tr
+                      key={idx}
+                      className={
+                        isCurrent
+                          ? "bg-blue-50"
+                          : idx % 2 === 0
+                          ? "bg-white"
+                          : "bg-gray-50"
+                      }
+                    >
+                      <td className="px-4 py-2 text-gray-800">
+                        {formatLoginTime(ev.timestamp)}
+                      </td>
+                      <td className="px-4 py-2 text-gray-800">
+                        {ev.ip || "—"}
+                      </td>
+                      <td className="px-4 py-2 text-gray-800">
+                        {getOSNameFromUserAgent(ev.device || "")}
+                      </td>
+                      <td className="px-4 py-2 text-gray-800">
+                        {getBrowserNameFromUserAgent(ev.device || "")}
+                      </td>
+                      <td className="px-4 py-2 text-gray-800">
+                        {ev.location || "—"}
+                      </td>
+                      <td className="px-4 py-2 text-gray-800">
+                        {isCurrent ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold">
+                            Current device
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-600">
+                            Past session
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* 3. Two-factor authentication (placeholder / future) */}
+      <section className="border-t border-gray-200 pt-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+          Two-factor authentication (2FA)
+        </h3>
+        <p className="text-sm text-gray-600 mb-3">
+          Add an extra layer of security by requiring a one-time code when you
+          log in. Support for authenticator apps and SMS codes is planned.
+        </p>
+        <div className="flex items-center justify-between border border-dashed border-gray-300 rounded-md px-4 py-3 bg-gray-50">
+          <div>
+            <p className="text-sm font-medium text-gray-800">
+              2FA is not available yet
+            </p>
+            <p className="text-xs text-gray-500">
+              This is a placeholder section. Once implemented, you&apos;ll be able
+              to enable 2FA here.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="px-4 py-2 rounded-md border border-gray-300 text-gray-500 text-sm font-semibold cursor-not-allowed"
+            disabled
+          >
+            Coming soon
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 export default function ProfileSettings() {
@@ -637,28 +965,36 @@ export default function ProfileSettings() {
 
   return (
     <div className="flex flex-col items-center justify-center w-full bg-gradient-to-br from-blue-100 to-purple-200 py-10 min-h-[90vh]">
-      <div className="w-full max-w-6xl mx-auto shadow-xl rounded-2xl bg-white flex"
+      <div
+        className="w-full max-w-6xl mx-auto shadow-xl rounded-2xl bg-white flex"
         style={{ minHeight: "650px" }}
       >
         <aside className="w-72 border-r border-gray-200 px-8 py-10 relative">
           <button
             onClick={() => navigate("/dashboard")}
             className="absolute left-4 top-4 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-full shadow-lg p-2 transition flex items-center justify-center"
-            style={{ boxShadow: "0 4px 16px 0 rgba(0,0,0,0.07)", border: "2px solid white" }}
+            style={{
+              boxShadow: "0 4px 16px 0 rgba(0,0,0,0.07)",
+              border: "2px solid white",
+            }}
             aria-label="Back to dashboard"
           >
             <FiArrowLeft size={24} />
           </button>
-          <h2 className="text-2xl font-bold mb-8 text-gray-800 mt-9">Settings</h2>
+          <h2 className="text-2xl font-bold mb-8 text-gray-800 mt-9">
+            Settings
+          </h2>
           <nav className="flex flex-col gap-2">
-            {sidebar.map(item => (
+            {sidebar.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.path}
                 end={item.path === "/dashboard/settings"}
                 className={({ isActive }) =>
                   "px-4 py-2 text-left rounded-md font-medium transition " +
-                  (isActive ? "bg-blue-100 text-blue-700" : "hover:bg-gray-50 text-gray-700")
+                  (isActive
+                    ? "bg-blue-100 text-blue-700"
+                    : "hover:bg-gray-50 text-gray-700")
                 }
               >
                 {item.name}

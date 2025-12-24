@@ -87,7 +87,7 @@ function ProfileDetails() {
     } finally {
       try {
         URL.revokeObjectURL(preview);
-      } catch { }
+      } catch {}
     }
   };
 
@@ -141,17 +141,22 @@ function ProfileDetails() {
   };
 
   if (loading) {
-    return <div className="max-w-3xl text-black">Loading profile…</div>;
+    return (
+      <div className="max-w-3xl text-black dark:text-gray-100">
+        Loading profile…
+      </div>
+    );
   }
 
   return (
-    <div>
+    <div className="dark:text-gray-100">
       {msg && (
         <div
-          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium transition-opacity duration-300 ${msgType === "success"
-            ? "bg-green-100 text-green-700 border border-green-300"
-            : "bg-red-100 text-red-700 border border-red-300"
-            }`}
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium transition-opacity duration-300 ${
+            msgType === "success"
+              ? "bg-green-100 text-green-700 border border-green-300 dark:bg-green-900 dark:text-green-100 dark:border-green-700"
+              : "bg-red-100 text-red-700 border border-red-300 dark:bg-red-900 dark:text-red-100 dark:border-red-700"
+          }`}
         >
           {msg}
         </div>
@@ -181,7 +186,7 @@ function ProfileDetails() {
             />
             <button
               type="button"
-              className="border border-gray-400 text-gray-700 px-6 py-2 rounded-md font-medium hover:bg-gray-100 transition"
+              className="border border-gray-400 text-gray-700 dark:text-gray-200 dark:border-gray-600 px-6 py-2 rounded-md font-medium hover:bg-gray-100 dark:hover:bg-gray-800 transition"
               onClick={handleDeleteImage}
             >
               Delete picture
@@ -189,50 +194,58 @@ function ProfileDetails() {
           </div>
         </div>
         <div className="col-span-1">
-          <label className="block text-gray-700 font-medium mb-1">First name</label>
+          <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
+            First name
+          </label>
           <input
             type="text"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+            className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
           />
         </div>
         <div className="col-span-1">
-          <label className="block text-gray-700 font-medium mb-1">Last name</label>
+          <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
+            Last name
+          </label>
           <input
             type="text"
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+            className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-gray-700 font-medium mb-1">Email</label>
+          <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
+            Email
+          </label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+            className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-gray-700 font-medium mb-1">Field of study</label>
+          <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
+            Field of study
+          </label>
           <input
             type="text"
             value={profession}
             onChange={(e) => setProfession(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+            className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-gray-700 font-medium mb-1">
+          <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
             Preferred job titles
           </label>
           <textarea
             rows={3}
             value={bio}
             onChange={(e) => setBio(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+            className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
           />
         </div>
         <div className="col-span-2 mt-6 flex justify-end">
@@ -461,17 +474,22 @@ function AccountSettings() {
   };
 
   if (loading) {
-    return <div className="max-w-3xl text-black">Loading account settings…</div>;
+    return (
+      <div className="max-w-3xl text-black dark:text-gray-100">
+        Loading account settings…
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-3xl text-black">
+    <div className="max-w-3xl text-black dark:text-gray-100">
       {msg && (
         <div
-          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${msgType === "success"
-            ? "bg-green-100 text-green-700 border border-green-300"
-            : "bg-red-100 text-red-700 border border-red-300"
-            }`}
+          className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${
+            msgType === "success"
+              ? "bg-green-100 text-green-700 border border-green-300 dark:bg-green-900 dark:text-green-100 dark:border-green-700"
+              : "bg-red-100 text-red-700 border border-red-300 dark:bg-red-900 dark:text-red-100 dark:border-red-700"
+          }`}
         >
           {msg}
         </div>
@@ -480,10 +498,10 @@ function AccountSettings() {
       {/* 1. Username & primary email (top of page) */}
       <form className="space-y-8" onSubmit={handleSave}>
         <section>
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
             Account identity
           </h3>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
             Update your username and primary email. We’ll check if they are
             already in use by another account.
           </p>
@@ -491,41 +509,41 @@ function AccountSettings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Username */}
             <div>
-              <label className="block text-gray-700 font-medium mb-1">
+              <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
                 Username
               </label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Shown on your dashboard and social-style feed.
               </p>
             </div>
 
             {/* Primary email */}
             <div>
-              <label className="block text-gray-700 font-medium mb-1">
+              <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
                 Primary email
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Used for login, password reset, and important notifications.
               </p>
               <div className="mt-1 text-xs">
                 {emailVerified ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 dark:bg-green-900 dark:text-green-100 dark:border-green-700">
                     ● Email verified
                   </span>
                 ) : (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100 dark:border-yellow-700">
                     ● Not verified yet
                   </span>
                 )}
@@ -547,11 +565,11 @@ function AccountSettings() {
       </form>
 
       {/* 2. Email verification code input */}
-      <section className="mt-10 border-t border-gray-200 pt-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+      <section className="mt-10 border-t border-gray-200 dark:border-gray-800 pt-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
           Verify your email
         </h3>
-        <p className="text-sm text-gray-600 mb-3">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
           After changing your email, you can send a 6-digit code to the address
           above. You can also request a new code at any time.
         </p>
@@ -564,7 +582,7 @@ function AccountSettings() {
               maxLength={6}
               value={verificationCode}
               onChange={(e) => setVerificationCode(e.target.value)}
-              className="w-full sm:w-40 rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black tracking-[0.3em] text-center"
+              className="w-full sm:w-40 rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100 tracking-[0.3em] text-center"
               placeholder="123456"
             />
             <button
@@ -580,31 +598,31 @@ function AccountSettings() {
           <button
             type="button"
             onClick={handleSendCode}
-            className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 px-4 py-2 rounded-md text-sm font-semibold transition disabled:opacity-60"
+            className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-100 px-4 py-2 rounded-md text-sm font-semibold transition disabled:opacity-60"
             disabled={sendingCode || cooldown > 0}
           >
             {sendingCode
               ? "Sending..."
               : cooldown > 0
-                ? `Send again in ${cooldown}s`
-                : "Send verification code"}
+              ? `Send again in ${cooldown}s`
+              : "Send verification code"}
           </button>
         </form>
       </section>
 
       {/* 3. Danger zone – delete account */}
-      <section className="mt-10 border-t border-gray-200 pt-6">
+      <section className="mt-10 border-t border-gray-200 dark:border-gray-800 pt-6">
         <h3 className="text-lg font-semibold text-red-600 mb-2">
           Danger zone
         </h3>
-        <p className="text-sm text-gray-600 mb-3">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
           Deleting your account will remove your TalentMatch data (profile,
           matches, and related content). This action can’t be undone.
         </p>
         <button
           type="button"
           onClick={handleDeleteAccount}
-          className="px-4 py-2 rounded-md border border-red-300 text-red-700 hover:bg-red-50 text-sm font-semibold transition"
+          className="px-4 py-2 rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/40 text-sm font-semibold transition"
           disabled={deleting}
         >
           {deleting ? "Deleting…" : "Delete my account"}
@@ -615,7 +633,11 @@ function AccountSettings() {
 }
 
 function Notifications() {
-  return <div className="max-w-3xl text-black">Notification settings go here.</div>;
+  return (
+    <div className="max-w-3xl text-black dark:text-gray-100">
+      Notification settings go here.
+    </div>
+  );
 }
 
 function Security() {
@@ -865,13 +887,13 @@ function Security() {
   };
 
   return (
-    <div className="max-w-3xl text-black">
+    <div className="max-w-3xl text-black dark:text-gray-100">
       {msg && (
         <div
           className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${
             msgType === "success"
-              ? "bg-green-100 text-green-700 border border-green-300"
-              : "bg-red-100 text-red-700 border border-red-300"
+              ? "bg-green-100 text-green-700 border border-green-300 dark:bg-green-900 dark:text-green-100 dark:border-green-700"
+              : "bg-red-100 text-red-700 border border-red-300 dark:bg-red-900 dark:text-red-100 dark:border-red-700"
           }`}
         >
           {msg}
@@ -880,47 +902,47 @@ function Security() {
 
       {/* 1. Change password */}
       <section className="mb-10">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
           Change password
         </h3>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
           Update your password to keep your account secure.
         </p>
 
         <form className="space-y-4" onSubmit={handleChangePassword}>
           <div>
-            <label className="block text-gray-700 font-medium mb-1">
+            <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
               Current password
             </label>
             <input
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-gray-700 font-medium mb-1">
+              <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
                 New password
               </label>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
               />
             </div>
             <div>
-              <label className="block text-gray-700 font-medium mb-1">
+              <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
                 Confirm new password
               </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-300 bg-white text-black"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
               />
             </div>
           </div>
@@ -938,13 +960,13 @@ function Security() {
       </section>
 
       {/* 2. Recent logins */}
-      <section className="mb-10 border-t border-gray-200 pt-6">
+      <section className="mb-10 border-t border-gray-200 dark:border-gray-800 pt-6">
         <div className="flex items-center justify-between mb-4 gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Recent logins
             </h3>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               Review where your account has been accessed recently.
             </p>
           </div>
@@ -952,41 +974,45 @@ function Security() {
             type="button"
             onClick={handleLogoutAllDevices}
             disabled={loggingOutAll}
-            className="inline-flex items-center px-4 py-2 rounded-full border border-red-200 bg-red-50 text-red-700 text-xs sm:text-sm font-semibold hover:bg-red-100 disabled:opacity-50 whitespace-nowrap"
+            className="inline-flex items-center px-4 py-2 rounded-full border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs sm:text-sm font-semibold hover:bg-red-100 dark:hover:bg-red-900 disabled:opacity-50 whitespace-nowrap"
           >
             {loggingOutAll ? "Signing out…" : "Sign out from all devices"}
           </button>
         </div>
 
         {loadingLogins ? (
-          <p className="text-sm text-gray-500">Loading login activity…</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Loading login activity…
+          </p>
         ) : loginsError ? (
-          <p className="text-sm text-red-600">{loginsError}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {loginsError}
+          </p>
         ) : loginEvents.length === 0 ? (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             No login activity found yet.
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm border border-gray-200 rounded-md overflow-hidden">
-              <thead className="bg-gray-50">
+            <table className="min-w-full text-sm border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
+              <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
-                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                  <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-200 font-semibold">
                     Date &amp; time
                   </th>
-                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                  <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-200 font-semibold">
                     IP address
                   </th>
-                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                  <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-200 font-semibold">
                     Operating system
                   </th>
-                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                  <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-200 font-semibold">
                     Browser
                   </th>
-                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                  <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-200 font-semibold">
                     Location
                   </th>
-                  <th className="px-4 py-2 text-left text-gray-700 font-semibold">
+                  <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-200 font-semibold">
                     Session
                   </th>
                 </tr>
@@ -999,30 +1025,30 @@ function Security() {
                       key={idx}
                       className={
                         isCurrent
-                          ? "bg-blue-50"
+                          ? "bg-blue-50 dark:bg-blue-950/40"
                           : idx % 2 === 0
-                          ? "bg-white"
-                          : "bg-gray-50"
+                          ? "bg-white dark:bg-gray-900"
+                          : "bg-gray-50 dark:bg-gray-800"
                       }
                     >
-                      <td className="px-4 py-2 text-gray-800">
+                      <td className="px-4 py-2 text-gray-800 dark:text-gray-100">
                         {formatLoginTime(ev.timestamp)}
                       </td>
-                      <td className="px-4 py-2 text-gray-800">
+                      <td className="px-4 py-2 text-gray-800 dark:text-gray-100">
                         {ev.ip || "—"}
                       </td>
-                      <td className="px-4 py-2 text-gray-800">
+                      <td className="px-4 py-2 text-gray-800 dark:text-gray-100">
                         {getOSNameFromUserAgent(ev.device || "")}
                       </td>
-                      <td className="px-4 py-2 text-gray-800">
+                      <td className="px-4 py-2 text-gray-800 dark:text-gray-100">
                         {getBrowserNameFromUserAgent(ev.device || "")}
                       </td>
-                      <td className="px-4 py-2 text-gray-800">
+                      <td className="px-4 py-2 text-gray-800 dark:text-gray-100">
                         {ev.location || "—"}
                       </td>
-                      <td className="px-4 py-2 text-gray-800">
+                      <td className="px-4 py-2 text-gray-800 dark:text-gray-100">
                         {isCurrent ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-blue-700 text-xs font-semibold whitespace-nowrap">
                             Current device
                           </span>
                         ) : ev.session_id ? (
@@ -1034,7 +1060,7 @@ function Security() {
                             disabled={
                               loggingOutSessionId === ev.session_id
                             }
-                            className="inline-flex items-center px-3 py-1 rounded-full border border-red-200 bg-red-100 text-red-700 text-xs font-semibold hover:bg-red-200 disabled:opacity-50 whitespace-nowrap"
+                            className="inline-flex items-center px-3 py-1 rounded-full border border-red-200 dark:border-red-700 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-semibold hover:bg-red-200 dark:hover:bg-red-900 disabled:opacity-50 whitespace-nowrap"
                           >
                             {loggingOutSessionId === ev.session_id
                               ? "Logging out..."
@@ -1052,27 +1078,27 @@ function Security() {
       </section>
 
       {/* 3. Two-factor authentication (placeholder / future) */}
-      <section className="border-t border-gray-200 pt-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+      <section className="border-t border-gray-200 dark:border-gray-800 pt-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
           Two-factor authentication (2FA)
         </h3>
-        <p className="text-sm text-gray-600 mb-3">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
           Add an extra layer of security by requiring a one-time code when you
           log in. Support for authenticator apps and SMS codes is planned.
         </p>
-        <div className="flex items-center justify-between border border-dashed border-gray-300 rounded-md px-4 py-3 bg-gray-50">
+        <div className="flex items-center justify-between border border-dashed border-gray-300 dark:border-gray-700 rounded-md px-4 py-3 bg-gray-50 dark:bg-gray-900">
           <div>
-            <p className="text-sm font-medium text-gray-800">
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-100">
               2FA is not available yet
             </p>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               This is a placeholder section. Once implemented, you&apos;ll be able
               to enable 2FA here.
             </p>
           </div>
           <button
             type="button"
-            className="px-4 py-2 rounded-md border border-gray-300 text-gray-500 text-sm font-semibold cursor-not-allowed"
+            className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-sm font-semibold cursor-not-allowed"
             disabled
           >
             Coming soon
@@ -1094,12 +1120,12 @@ export default function ProfileSettings() {
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col items-center justify-center w-full bg-gradient-to-br from-blue-100 to-purple-200 py-10 min-h-[90vh]">
+    <div className="flex flex-col items-center justify-center w-full bg-gradient-to-br from-blue-100 to-purple-200 dark:from-gray-900 dark:to-gray-950 py-10 min-h-[90vh]">
       <div
-        className="w-full max-w-6xl mx-auto shadow-xl rounded-2xl bg-white flex"
+        className="w-full max-w-6xl mx-auto shadow-xl rounded-2xl bg-white dark:bg-gray-900 dark:text-gray-100 flex"
         style={{ minHeight: "650px" }}
       >
-        <aside className="w-72 border-r border-gray-200 px-8 py-10 relative">
+        <aside className="w-72 border-r border-gray-200 dark:border-gray-800 px-8 py-10 relative">
           <button
             onClick={() => navigate("/dashboard")}
             className="absolute left-4 top-4 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-full shadow-lg p-2 transition flex items-center justify-center"
@@ -1111,7 +1137,7 @@ export default function ProfileSettings() {
           >
             <FiArrowLeft size={24} />
           </button>
-          <h2 className="text-2xl font-bold mb-8 text-gray-800 mt-9">
+          <h2 className="text-2xl font-bold mb-8 text-gray-800 dark:text-gray-100 mt-9">
             Settings
           </h2>
           <nav className="flex flex-col gap-2">
@@ -1123,8 +1149,8 @@ export default function ProfileSettings() {
                 className={({ isActive }) =>
                   "px-4 py-2 text-left rounded-md font-medium transition " +
                   (isActive
-                    ? "bg-blue-100 text-blue-700"
-                    : "hover:bg-gray-50 text-gray-700")
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200"
+                    : "hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200")
                 }
               >
                 {item.name}

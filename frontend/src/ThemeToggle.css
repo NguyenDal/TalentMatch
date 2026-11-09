@@ -1,0 +1,26 @@
+.tm-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #ded9e8;
+  border-radius: 50%;
+  color: #675777;
+  background: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.tm-theme-toggle:hover { color: #7152e8; background: #f1ecfb; border-color: #b4a1df; }
+.tm-theme-toggle:focus-visible { outline: 3px solid #8c6fe9; outline-offset: 4px; }
+.dark .tm-theme-toggle { color: #d6c5ff; background: #252132; border-color: #423950; }
+.dark .tm-theme-toggle:hover { color: #fff; background: #342b47; border-color: #a68be7; }
+.tm-theme-toggle--app { margin-left: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tm-theme-toggle { transition: none; }
+}

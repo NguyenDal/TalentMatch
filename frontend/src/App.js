@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import ResumeMatcher from "./ResumeMatcher";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Signup from "./Signup";
@@ -11,7 +11,16 @@ import PublicNavBar from "./PublicNavBar";
 import ProfileSettings from "./ProfileSettings.js";
 import DashboardPage from "./DashboardPage";
 import ContactPage from "./ContactPage";
-import HomeIntro from "./HomeIntro"; // 🔹 NEW: intro/landing page
+import HomeIntro from "./HomeIntro";
+import { ThemeProvider } from "./ThemeContext";
+
+function RouteScrollReset() {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (!hash) window.scrollTo(0, 0);
+  }, [pathname, hash]);
+  return null;
+}
 
 // Main authenticated content (with app nav bar)
 const MainContent = () => {
@@ -26,7 +35,16 @@ const MainContent = () => {
 };
 
 // PublicLayout wraps all public pages in the branded nav and background
-function PublicLayout({ children }) {
+function PublicLayout({ children, landing = false }) {
+  if (landing) {
+    return (
+      <div className="tm-public-page">
+        <PublicNavBar variant="landing" />
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-800 via-purple-500 to-blue-400 relative overflow-hidden">
       <PublicNavBar />
@@ -39,8 +57,7 @@ function PublicLayout({ children }) {
 
 // Main app with authentication-aware routing
 const App = () => {
-  const { user, setAuthData, login } = useAuth();
-  const [showLogin, setShowLogin] = useState(true);
+  const { user, setAuthData } = useAuth();
 
   // Handler for setting auth on signup
   const handleLogin = (data) => {
@@ -88,7 +105,7 @@ const App = () => {
       <Route
         path="/"
         element={
-          <PublicLayout>
+          <PublicLayout landing>
             <HomeIntro />
           </PublicLayout>
         }
@@ -97,16 +114,16 @@ const App = () => {
       <Route
         path="/login"
         element={
-          <PublicLayout>
-            <Login onSwitch={() => setShowLogin(false)} onLogin={login} />
+          <PublicLayout landing>
+            <Login />
           </PublicLayout>
         }
       />
       <Route
         path="/signup"
         element={
-          <PublicLayout>
-            <Signup onSwitch={() => setShowLogin(true)} onLogin={handleLogin} />
+          <PublicLayout landing>
+            <Signup onLogin={handleLogin} />
           </PublicLayout>
         }
       />
@@ -129,7 +146,7 @@ const App = () => {
       <Route
         path="/contact"
         element={
-          <PublicLayout>
+          <PublicLayout landing>
             <ContactPage />
           </PublicLayout>
         }
@@ -143,10 +160,13 @@ const App = () => {
 // WrappedApp: root of your app
 export default function WrappedApp() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <RouteScrollReset />
+          <App />
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

@@ -3,7 +3,6 @@ import axios from "axios";
 import { BASE_URL } from "./api";
 import { FiLock } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
-import PublicNavBar from "./PublicNavBar"; // Add the public navbar
 
 // Helper to read a query param from URL.
 function useQueryParam(param) {
@@ -70,7 +69,6 @@ export default function ResetPassword() {
   if (!token || err) {
     return (
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-800 via-purple-500 to-blue-400 relative overflow-hidden">
-        <PublicNavBar />
         <div className="flex items-center justify-center w-full min-h-screen">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md px-8 py-10 mt-24 mb-10 relative z-20">
             <div className="flex justify-between items-center mb-4">
@@ -96,7 +94,6 @@ export default function ResetPassword() {
   if (success) {
     return (
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-800 via-purple-500 to-blue-400 relative overflow-hidden">
-        <PublicNavBar />
         <div className="flex items-center justify-center w-full min-h-screen">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md px-8 py-10 mt-24 mb-10 relative z-20">
             <div className="flex justify-between items-center mb-4">
@@ -121,7 +118,6 @@ export default function ResetPassword() {
   // Show form to set new password.
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-800 via-purple-500 to-blue-400 relative overflow-hidden">
-      <PublicNavBar />
       {/* Centered reset password card */}
       <div className="flex items-center justify-center w-full min-h-screen">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md px-8 py-10 mt-24 mb-10 relative z-20">

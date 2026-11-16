@@ -77,8 +77,7 @@
   gap: 26px;
 }
 
-.tm-nav__link,
-.tm-nav__login {
+.tm-nav__link {
   color: var(--tm-nav-muted);
   text-decoration: none;
   font-size: 13px;
@@ -87,18 +86,16 @@
   transition: color 160ms ease;
 }
 
-.tm-nav__login,
 .tm-nav__link:hover,
 .tm-nav__link.active {
   color: var(--tm-nav-text);
 }
 
-.tm-nav--landing .tm-nav__link:hover,
-.tm-nav--landing .tm-nav__login:hover {
+.tm-nav--landing .tm-nav__link:hover {
   color: #7152e8;
 }
 
-.tm-nav__signup {
+.tm-nav__login-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -115,16 +112,16 @@
   transition: background 160ms ease, box-shadow 160ms ease;
 }
 
-.tm-nav__signup svg {
+.tm-nav__login-button svg {
   font-size: 17px;
 }
 
-.tm-nav--landing .tm-nav__signup {
+.tm-nav--landing .tm-nav__login-button {
   background: #7152e8;
   color: #fff;
 }
 
-.tm-nav--landing .tm-nav__signup:hover {
+.tm-nav--landing .tm-nav__login-button:hover {
   background: #6040d6;
   box-shadow: 0 4px 12px #7152e825;
 }
@@ -166,8 +163,7 @@
 }
 
 .dark .tm-nav--landing .tm-nav__brand-dot,
-.dark .tm-nav--landing .tm-nav__link:hover,
-.dark .tm-nav--landing .tm-nav__login:hover { color: #c4a9ff; }
+.dark .tm-nav--landing .tm-nav__link:hover { color: #c4a9ff; }
 
 .dark .tm-nav--landing .tm-nav__mobile-links {
   background: #201b2b;
@@ -181,8 +177,7 @@
     gap: 16px;
   }
 
-  .tm-nav__desktop-links,
-  .tm-nav__desktop-signup {
+  .tm-nav__desktop-links {
     display: none;
   }
 
@@ -219,14 +214,14 @@
     font-size: 14px;
   }
 
-  .tm-nav__mobile-links .tm-nav__signup {
+  .tm-nav__mobile-links .tm-nav__login-button {
     margin-top: 6px;
   }
 }
 
 @media (max-width: 520px) {
-  .tm-nav--landing .tm-nav__login { display: none; }
-  .tm-nav--landing .tm-nav__mobile-login { display: block; }
+  .tm-nav__desktop-login { display: none; }
+  .tm-nav__mobile-login { display: inline-flex; }
 }
 
 @media (max-width: 380px) {

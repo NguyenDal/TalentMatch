@@ -9,7 +9,6 @@ export default function PublicFooter() {
         <Link className="tm-footer-brand" to="/" aria-label="TalentMatch home">
           <FiLayers aria-hidden="true" /> TalentMatch<span>.</span>
         </Link>
-        <p>Built with purpose by An Nguyen.</p>
         <Link to="/contact">Get in touch <FiArrowUpRight aria-hidden="true" /></Link>
       </div>
     </footer>

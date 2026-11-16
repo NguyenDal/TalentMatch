@@ -12,17 +12,18 @@ const profile = {
   countryCode: "+1",
   phone: "782-409-5339",
   email: "annguyen270504@gmail.com",
-  resume: "https://talentmatch-userfiles.s3.ca-central-1.amazonaws.com/resume/Nguyen_s_Resume.pdf",
+  linkedin: "https://linkedin.com/in/annguyen270504",
+  resume: "https://talentmatch-userfiles.s3.ca-central-1.amazonaws.com/resume/An_Nguyen_resume.pdf",
   blurb: "Applied CS graduate passionate about full-stack development, AI, and developer tooling. Building TalentMatch.",
   skills: ["React", "FastAPI", "Python", "Java", "Node.js", "PostgreSQL", "AWS S3", "Tailwind CSS", "Unity/C#", "MySQL"],
 };
 
 const projects = [
   {
-    title: "TalentMatch",
-    stack: "React · FastAPI · PostgreSQL · AWS S3",
-    link: "https://github.com/NguyenDal/TalentMatch",
-    description: "Resume → Job Description matcher with AI-powered requirement extraction, match scoring, and Q&A.",
+    title: "FastBoost",
+    stack: "React · Express · Prisma · PostgreSQL",
+    link: "https://github.com/NguyenDal/FastBoost",
+    description: "A game services marketplace with account management, configurable orders, and real-time chat between customers and providers.",
     icon: FiLayers,
     category: "WEB APPLICATION",
   },
@@ -70,7 +71,7 @@ export default function ContactPage() {
               <p className="tm-contact-name">Hi, I’m {profile.name}.</p>
               <p className="tm-contact-bio">{profile.blurb}</p>
               <div className="tm-contact-actions">
-                <a className="tm-contact-button tm-contact-button-primary" href={emailHref}>
+                <a className="tm-contact-button tm-contact-button-primary" href={profile.linkedin} target="_blank" rel="noopener noreferrer">
                   Let’s connect <FiArrowUpRight aria-hidden="true" />
                 </a>
                 <a className="tm-contact-button tm-contact-button-outline" href={profile.resume} target="_blank" rel="noopener noreferrer">
@@ -79,12 +80,14 @@ export default function ContactPage() {
               </div>
             </div>
             <div className="tm-contact-portrait">
-              <div className="tm-contact-orbit tm-contact-orbit-outer" aria-hidden="true" />
-              <div className="tm-contact-orbit tm-contact-orbit-inner" aria-hidden="true" />
-              <span className="tm-contact-floating-icon tm-contact-floating-code" aria-hidden="true"><FiCode /></span>
-              <span className="tm-contact-floating-icon tm-contact-floating-layers" aria-hidden="true"><FiLayers /></span>
-              <div className="tm-contact-photo-frame">
-                <img src={portrait} alt="An Nguyen in graduation attire outside Dalhousie University's Faculty of Computer Science" width="1536" height="2048" />
+              <div className="tm-contact-portrait-art">
+                <div className="tm-contact-orbit tm-contact-orbit-outer" aria-hidden="true" />
+                <div className="tm-contact-orbit tm-contact-orbit-inner" aria-hidden="true" />
+                <span className="tm-contact-floating-icon tm-contact-floating-code" aria-hidden="true"><FiCode /></span>
+                <span className="tm-contact-floating-icon tm-contact-floating-layers" aria-hidden="true"><FiLayers /></span>
+                <div className="tm-contact-photo-frame">
+                  <img src={portrait} alt="An Nguyen in graduation attire outside Dalhousie University's Faculty of Computer Science" width="1536" height="2048" />
+                </div>
               </div>
               <div className="tm-contact-portrait-caption"><span>AN NGUYEN</span><strong>Applied CS · Full-stack · AI</strong></div>
             </div>

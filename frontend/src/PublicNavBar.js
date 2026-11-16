@@ -56,9 +56,8 @@ export default function PublicNavBar({ variant = "contrast" }) {
 
         <div className="tm-nav__actions">
           {variant === "landing" && <ThemeToggle />}
-          <Link to="/login" className="tm-nav__login" onClick={closeMenu}>Log in</Link>
-          <Link to="/signup" className="tm-nav__signup tm-nav__desktop-signup">
-            Get started <FiArrowUpRight aria-hidden="true" />
+          <Link to="/login" className="tm-nav__login-button tm-nav__desktop-login" onClick={closeMenu}>
+            Log in <FiArrowUpRight aria-hidden="true" />
           </Link>
           <button
             ref={menuButton}
@@ -81,11 +80,10 @@ export default function PublicNavBar({ variant = "contrast" }) {
         hidden={!menuOpen}
       >
         <NavLink to="/" end className="tm-nav__link" onClick={closeMenu}>Home</NavLink>
-        <Link to="/login" className="tm-nav__link tm-nav__mobile-login" onClick={closeMenu}>Log in</Link>
         <Link to="/#how-it-works" className="tm-nav__link" onClick={handleStepsClick}>How it works</Link>
         <NavLink to="/contact" className="tm-nav__link" onClick={closeMenu}>Contact</NavLink>
-        <Link to="/signup" className="tm-nav__signup" onClick={closeMenu}>
-          Get started <FiArrowUpRight aria-hidden="true" />
+        <Link to="/login" className="tm-nav__login-button tm-nav__mobile-login" onClick={closeMenu}>
+          Log in <FiArrowUpRight aria-hidden="true" />
         </Link>
       </nav>
     </header>

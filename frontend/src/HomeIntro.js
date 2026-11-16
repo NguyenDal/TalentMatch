@@ -1,86 +1,17 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
 import {
-  FiArrowDown, FiArrowRight, FiArrowUpRight, FiCheck, FiCheckCircle,
-  FiFileText, FiLayers, FiMessageCircle, FiPlus, FiTarget, FiUpload,
+  FiArrowDown, FiArrowRight, FiArrowUpRight,
+  FiFileText, FiLayers, FiMessageCircle, FiTarget, FiUpload,
 } from "react-icons/fi";
 import "./HomeIntro.css";
-
-const requirements = [
-  { title: "React & component development", detail: "Found in your project experience", met: true },
-  { title: "Responsive interface design", detail: "Found in your skills and projects", met: true },
-  { title: "Git & team collaboration", detail: "Found in your work experience", met: true },
-  { title: "TypeScript experience", detail: "Add an example if you have one", met: false },
-];
+import MatchWalkthrough from "./MatchWalkthrough";
 
 const steps = [
   { icon: FiUpload, title: "Start with your story", description: "Upload your resume. Bring your experience, projects, and skills together in one place.", note: "YOUR RESUME" },
   { icon: FiFileText, title: "Add the opportunity", description: "Paste a job description for a role that interests you. We help break down what it asks for.", note: "THE JOB DESCRIPTION" },
   { icon: FiTarget, title: "See the bigger picture", description: "Explore your match, spot gaps, and use tailored Q&A to prepare for your next step.", note: "A CLEARER DIRECTION" },
 ];
-
-function MatchPreview() {
-  const [view, setView] = useState("requirements");
-
-  return (
-    <div className="tm-preview-stage">
-      <div className="tm-preview-orbit" aria-hidden="true" />
-      <div className="tm-resume-tag">
-        <span className="tm-resume-icon"><FiFileText aria-hidden="true" /></span>
-        <div><strong>Your next chapter.pdf</strong><span>A little experience. A lot of potential.</span></div>
-        <FiCheckCircle className="tm-ready-icon" aria-label="Ready" />
-      </div>
-      <section className="tm-preview" aria-label="Example resume match analysis">
-        <div className="tm-preview-topbar">
-          <span><FiLayers aria-hidden="true" /> YOUR MATCH OVERVIEW</span>
-          <span className="tm-example-label">Example</span>
-        </div>
-        <div className="tm-preview-summary">
-          <div>
-            <span className="tm-small-label">THE OPPORTUNITY</span>
-            <h2>Frontend Developer</h2>
-            <p>A new role. Familiar strengths.</p>
-            <span className="tm-match-label"><span /> Strong foundation</span>
-          </div>
-          <div className="tm-score" aria-label="Example match score: 75 percent">
-            <div><strong>75<span>%</span></strong><span>MATCH</span></div>
-          </div>
-        </div>
-        <div className="tm-preview-switch" role="group" aria-label="Example analysis view">
-          <button type="button" aria-pressed={view === "requirements"} onClick={() => setView("requirements")}>
-            <FiCheckCircle aria-hidden="true" /> Requirements <span>4</span>
-          </button>
-          <button type="button" aria-pressed={view === "interview"} onClick={() => setView("interview")}>
-            <FiMessageCircle aria-hidden="true" /> Interview prep
-          </button>
-        </div>
-        <div className="tm-preview-content" aria-live="polite">
-          {view === "requirements" ? (
-            <ul className="tm-requirements">
-              {requirements.map(({ title, detail, met }) => (
-                <li key={title}>
-                  <span className={"tm-requirement-icon " + (met ? "is-met" : "is-gap")}>
-                    {met ? <FiCheck aria-label="Matched" /> : <FiPlus aria-label="To strengthen" />}
-                  </span>
-                  <div><strong>{title}</strong><span>{detail}</span></div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="tm-interview-example">
-              <span className="tm-small-label">A QUESTION TO PREPARE FOR</span>
-              <h3>“How do you build an interface that works on every screen?”</h3>
-              <p>Start with a project from your resume. Explain your layout choices, how you tested them, and what you learned.</p>
-              <span className="tm-interview-hint"><FiMessageCircle aria-hidden="true" /> Your experience is a great place to start.</span>
-            </div>
-          )}
-        </div>
-        <div className="tm-preview-bottom"><span className="tm-sparkle" aria-hidden="true">✦</span> Turn your experience into your next opportunity.</div>
-      </section>
-      <p className="tm-preview-caption">An illustrative preview. Your results will reflect your resume and the role.</p>
-    </div>
-  );
-}
 
 export default function HomeIntro() {
   return (
@@ -98,7 +29,7 @@ export default function HomeIntro() {
               </div>
               <div className="tm-hero-note"><span className="tm-note-line" /> A resume. A job description. A fresh perspective.</div>
             </div>
-            <MatchPreview />
+            <MatchWalkthrough />
           </div>
         </section>
 
@@ -140,7 +71,6 @@ export default function HomeIntro() {
       <footer className="tm-footer">
         <div className="tm-container tm-footer-inner">
           <Link className="tm-footer-brand" to="/" aria-label="TalentMatch home"><FiLayers aria-hidden="true" /> TalentMatch<span>.</span></Link>
-          <p>Built with purpose by An Nguyen.</p>
           <Link to="/contact">Get in touch <FiArrowUpRight aria-hidden="true" /></Link>
         </div>
       </footer>

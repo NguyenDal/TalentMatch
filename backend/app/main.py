@@ -62,15 +62,105 @@ conf = ConnectionConfig(
 
 # === Utility Functions ===
 
+class InvalidAnalysisResponse(ValueError):
+    """The analysis provider did not return a complete, usable result."""
+
+
 def safe_json_parse(content):
-    """Try to safely parse a JSON array/object from AI response text."""
+    """Parse JSON, including a fenced JSON block, without inventing results."""
+    if not isinstance(content, str) or not content.strip():
+        raise InvalidAnalysisResponse("Missing analysis content")
+    content = content.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", content, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        content = fenced.group(1)
     try:
-        match = re.search(r'\[\s*{.*}\s*\]', content, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
         return json.loads(content)
-    except Exception:
-        return [{"requirement": "AI Extraction Error", "explanation": content}]
+    except (ValueError, TypeError) as exc:
+        raise InvalidAnalysisResponse("Invalid analysis JSON") from exc
+
+
+def analysis_json(response):
+    """Reject truncation/refusal before parsing the provider's JSON response."""
+    try:
+        choice = response.choices[0]
+        if choice.finish_reason != "stop":
+            raise InvalidAnalysisResponse("Incomplete analysis response")
+        return safe_json_parse(choice.message.content)
+    except (AttributeError, IndexError, TypeError) as exc:
+        raise InvalidAnalysisResponse("Missing analysis response") from exc
+
+
+def validate_requirements(items):
+    if not isinstance(items, list):
+        raise InvalidAnalysisResponse("Requirements must be a list")
+    result, seen = [], set()
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("requirement"), str):
+            raise InvalidAnalysisResponse("Invalid requirement")
+        title = item["requirement"].strip()
+        explanation = item.get("explanation", "")
+        if not title or not isinstance(explanation, str):
+            raise InvalidAnalysisResponse("Invalid requirement fields")
+        if title.casefold() not in seen:
+            result.append({"requirement": title, "explanation": explanation.strip()})
+            seen.add(title.casefold())
+    return result
+
+
+def validate_matches(items, requirements):
+    if not isinstance(items, list):
+        raise InvalidAnalysisResponse("Matches must be a list")
+    expected = {item["requirement"].casefold(): item["requirement"] for item in requirements}
+    result, seen = [], set()
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("requirement"), str):
+            raise InvalidAnalysisResponse("Invalid match")
+        key = item["requirement"].strip().casefold()
+        explanation = item.get("explanation", "")
+        if (key not in expected or key in seen or type(item.get("met")) is not bool
+                or not isinstance(explanation, str)):
+            raise InvalidAnalysisResponse("Invalid match fields")
+        result.append({"requirement": expected[key], "met": item["met"], "explanation": explanation.strip()})
+        seen.add(key)
+    if seen != set(expected):
+        raise InvalidAnalysisResponse("Incomplete requirement coverage")
+    return result
+
+
+def validate_suggestions(items):
+    if not isinstance(items, list):
+        raise InvalidAnalysisResponse("Suggestions must be a list")
+    result = []
+    for item in items:
+        if (not isinstance(item, dict)
+                or not isinstance(item.get("question"), str) or not item["question"].strip()
+                or not isinstance(item.get("answer"), str) or not item["answer"].strip()):
+            raise InvalidAnalysisResponse("Invalid suggestion")
+        result.append({"question": item["question"].strip(), "answer": item["answer"].strip()})
+    return result
+
+
+def analysis_http_error(error):
+    """Map failures to safe public errors; never return provider bodies or keys."""
+    if isinstance(error, InvalidAnalysisResponse):
+        return HTTPException(status_code=502, detail="The analysis service returned an incomplete or invalid response. Please try again.")
+    if isinstance(error, openai.RateLimitError):
+        code = getattr(error, "code", None)
+        if code in {"insufficient_quota", "billing_hard_limit_reached", "billing_not_active", "usage_limit_reached"}:
+            return HTTPException(status_code=503, detail="Matching is unavailable because the analysis service has reached its usage limit. Please contact the site owner.")
+        return HTTPException(status_code=429, detail="The matching service is busy. Please wait a moment and try again.", headers={"Retry-After": "30"})
+    if isinstance(error, (openai.AuthenticationError, openai.PermissionDeniedError, openai.NotFoundError)):
+        return HTTPException(status_code=503, detail="The matching service is not configured correctly. Please contact the site owner.")
+    if isinstance(error, openai.APITimeoutError):
+        return HTTPException(status_code=504, detail="The matching service took too long to respond. Please try again.")
+    if isinstance(error, openai.APIConnectionError):
+        return HTTPException(status_code=503, detail="The analysis service could not be reached. Please try again in a moment.")
+    if isinstance(error, openai.BadRequestError) and getattr(error, "code", None) == "context_length_exceeded":
+        return HTTPException(status_code=422, detail="This resume and job description are too long to analyze together. Please shorten them and try again.")
+    if isinstance(error, openai.APIStatusError):
+        return HTTPException(status_code=502, detail="The analysis service could not complete this match. Please try again in a moment.")
+    return HTTPException(status_code=500, detail="We couldn’t complete this match. Please try again or contact the site owner.")
 
 def extract_text_from_pdf(file):
     """Extract all text from a PDF file (each page)."""
@@ -90,14 +180,14 @@ def extract_text(file: UploadFile):
     Extract text from uploaded file.
     Supports: PDF (.pdf), Word (.docx), and plain text (.txt).
     """
-    filename = file.filename.lower()
+    filename = (file.filename or "").lower()
     if filename.endswith('.pdf'):
         return extract_text_from_pdf(file.file)
     elif filename.endswith('.docx'):
         return extract_text_from_docx(file.file)
-    else:
-        # Treat everything else as plain text
-        return file.file.read().decode("utf-8", errors="ignore")
+    elif filename.endswith('.txt'):
+        return file.file.read().decode("utf-8-sig")
+    raise HTTPException(status_code=422, detail="Please upload a PDF, DOCX, or TXT resume.")
 
 def clean_explanation(text):
     """Make AI explanations more readable for users."""
@@ -172,16 +262,29 @@ async def geo_lookup(ip: str) -> str:
 # === OPENAI SETUP ===
 
 openai_api_key = os.getenv("OPENAI_API_KEY")
-client = openai.OpenAI(api_key=openai_api_key)
-MODEL = "gpt-4.1-nano"
+client = openai.OpenAI(api_key=openai_api_key) if openai_api_key else None
+MODEL = os.getenv("OPENAI_MODEL", "gpt-6-luna").strip() or "gpt-6-luna"
+
+
+def completion_options(temperature, token_limit):
+    """Use the current model's token/temperature contract, with legacy support."""
+    if MODEL.startswith("gpt-6") or re.match(r"^gpt-5\.[1-9]\d*(?:-|$)", MODEL):
+        return {"max_completion_tokens": token_limit, "reasoning_effort": "none"}
+    if re.match(r"^gpt-5(?:-(?:mini|nano))?(?:-\d{4}-\d{2}-\d{2})?$", MODEL):
+        return {"max_completion_tokens": token_limit, "reasoning_effort": "minimal"}
+    if MODEL.startswith(("gpt-5", "o1", "o3", "o4")):
+        return {"max_completion_tokens": token_limit}
+    return {"max_tokens": token_limit, "temperature": temperature}
 
 # === Requirement Extraction Functions ===
 
 def extract_requirements_gpt(job_desc):
-    """Ask OpenAI to extract explicit/implicit requirements from job posting."""
+    """Extract concise, distinct requirements supported by the job posting."""
     system_prompt = (
-        "Extract a detailed JSON array of all explicit and implicit job requirements from the following job description. "
-        "For each requirement, include the field 'requirement' (a short title), and 'explanation' (concise reason/context for why it's needed). "
+        "Extract a concise JSON array of the job requirements supported by the following job description. "
+        "Do not infer requirements the posting does not state. Deduplicate repeated or equivalent requirements, "
+        "while keeping distinct skills and qualifications separate. "
+        "For each requirement, include 'requirement' (a short title) and 'explanation' (at most one brief sentence of context). "
         "Only include requirements that could be checked on a resume (e.g., years of experience, education, certifications, security clearance, eligibility, skills, language, work location, schedule, etc). "
         "Format: [{\"requirement\": \"...\", \"explanation\": \"...\"}]"
     )
@@ -192,11 +295,9 @@ def extract_requirements_gpt(job_desc):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.2,
-        max_tokens=800,
+        **completion_options(temperature=0.2, token_limit=4096),
     )
-    requirements = safe_json_parse(response.choices[0].message.content)
-    return requirements
+    return validate_requirements(analysis_json(response))
 
 def match_requirements_gpt(resume_text, requirements):
     """
@@ -205,15 +306,16 @@ def match_requirements_gpt(resume_text, requirements):
     """
     system_prompt = (
         "You are a helpful HR assistant. For each job requirement below, check if the candidate resume CLEARLY meets the requirement. "
-        "For each, output an object: {'requirement': <requirement>, 'met': true/false, 'explanation': <very short explanation>}. "
-        "Be strict—if the requirement is not CLEARLY met in the resume, set 'met': false."
+        "For each, output an object: {'requirement': <requirement>, 'met': true/false, 'explanation': <one brief sentence citing resume evidence or the missing evidence>}. "
+        "Be strict—if the requirement is not CLEARLY met in the resume, set 'met': false. "
+        "Return every original requirement exactly once, preserving its title. Use JSON booleans, not strings."
     )
     req_list = [
         {"requirement": r["requirement"], "explanation": r.get("explanation", "")}
         for r in requirements
     ]
     user_prompt = (
-        f"Job requirements:\n{json.dumps(req_list, indent=2)}\n\n"
+        f"Job requirements:\n{json.dumps(req_list, separators=(',', ':'), ensure_ascii=False)}\n\n"
         f"Candidate resume:\n{resume_text}\n\n"
         "Return a JSON array as specified."
     )
@@ -223,11 +325,9 @@ def match_requirements_gpt(resume_text, requirements):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.2,
-        max_tokens=1800,
+        **completion_options(temperature=0.2, token_limit=4096),
     )
-    match_results = safe_json_parse(response.choices[0].message.content)
-    return match_results
+    return validate_matches(analysis_json(response), requirements)
 
 def ai_match_score(resume_text, job_text):
     """Simple overlap score for resume and job text as a backup."""
@@ -283,8 +383,7 @@ def generate_profile_trends(profession, bio):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.5,
-        max_tokens=600,
+        **completion_options(temperature=0.5, token_limit=1024),
     )
 
     raw = response.choices[0].message.content
@@ -335,7 +434,7 @@ app.add_middleware(
 # === Resume Upload & Analysis Endpoint ===
 
 @app.post("/upload-resume/")
-async def upload_resume(
+def upload_resume(
     resume: UploadFile = File(...),
     job_description: str = Form(...)
 ):
@@ -343,11 +442,24 @@ async def upload_resume(
     Receive user's resume file and job description,
     extract requirements and match using AI, return match data.
     """
+    job_text = job_description.strip()
+    if not job_text:
+        raise HTTPException(status_code=422, detail="Please paste a job description before checking your match.")
     try:
-        resume_text = extract_text(resume)
-        job_text = job_description
+        resume_text = extract_text(resume).strip()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="We couldn’t read this resume. Please upload a readable, unencrypted PDF, DOCX, or UTF-8 TXT file.") from exc
+    if not resume_text:
+        raise HTTPException(status_code=422, detail="No readable text was found in this resume. For a scanned PDF, use a text-based version instead.")
+    if client is None:
+        raise HTTPException(status_code=503, detail="The matching service is not configured yet. Please contact the site owner.")
 
+    try:
         requirements = extract_requirements_gpt(job_text)
+        if not requirements:
+            raise HTTPException(status_code=422, detail="No resume-checkable requirements were identified in this job description. Please include the role’s responsibilities and qualifications.")
         match_results = match_requirements_gpt(resume_text, requirements)
 
         met_requirements = []
@@ -367,7 +479,7 @@ async def upload_resume(
                 explanation += ai_expl
             explanation = clean_explanation(explanation)
             requirement_explanations[req] = explanation
-            if r.get("met") is True or str(r.get("met")).lower() == "true":
+            if r["met"]:
                 met_requirements.append(req)
             else:
                 missing_requirements.append(req)
@@ -377,8 +489,8 @@ async def upload_resume(
         # Extra AI Q&A for user guidance
         system_prompt = (
             "You are a smart job matching assistant. Analyze the following job description and resume. "
-            "1. Suggest up to 5 very relevant, dynamic, and context-specific questions a candidate might want to ask about their fit or preparation for this job (DO NOT use generic questions; infer from the specific job). "
-            "2. For each question, give a clear answer based on the resume and job description. "
+            "1. Suggest at most 3 focused, job-specific questions a candidate might ask about their fit or preparation. Do not use generic or repetitive questions. "
+            "2. Answer each question using the resume and job description in at most 2 concise sentences. Do not invent experience. "
             "Format your answer as a JSON list like this: "
             '[{\"question\": \"...\", \"answer\": \"...\"}]'
         )
@@ -392,10 +504,9 @@ async def upload_resume(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=0.3,
-            max_tokens=700,
+            **completion_options(temperature=0.3, token_limit=2048),
         )
-        ai_suggestions = safe_json_parse(response.choices[0].message.content)
+        ai_suggestions = validate_suggestions(analysis_json(response))
 
         return {
             "scores": [score],
@@ -404,14 +515,10 @@ async def upload_resume(
             "requirement_explanations": requirement_explanations,
             "ai_suggestions": ai_suggestions,
         }
-    except Exception as e:
-        return {
-            "scores": [0.0],
-            "met_requirements": [],
-            "missing_requirements": [],
-            "requirement_explanations": {},
-            "ai_suggestions": [{"question": "Error", "answer": str(e)}],
-        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise analysis_http_error(exc) from exc
 
 # === USER REGISTRATION ENDPOINT ===
 

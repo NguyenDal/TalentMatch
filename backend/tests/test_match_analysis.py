@@ -1,0 +1,206 @@
+"""Matching API regressions using provider fixtures; no live AI, email, or DB."""
+
+import json
+import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import httpx
+import openai
+
+# Reuse the isolated application bootstrap: dotenv is disabled and all secrets
+# are dummy values. No developer credentials are read by these tests.
+from test_google_auth import TEST_ENV
+from fastapi.testclient import TestClient
+from app import main
+
+
+def response(payload, finish="stop"):
+    content = payload if isinstance(payload, str) else json.dumps(payload)
+    return SimpleNamespace(choices=[SimpleNamespace(
+        finish_reason=finish, message=SimpleNamespace(content=content)
+    )])
+
+
+def provider_error(error_type, status, code=None):
+    return error_type(
+        "private-provider-detail-with-credential",
+        response=httpx.Response(status, request=httpx.Request("POST", "https://api.example.test/chat")),
+        body={"message": "private-provider-detail-with-credential", "code": code},
+    )
+
+
+REQUIREMENTS = [
+    {"requirement": "React", "explanation": "Build interfaces"},
+    {"requirement": "TypeScript", "explanation": "Maintain typed code"},
+]
+MATCHES = [
+    {"requirement": "React", "met": True, "explanation": "React project listed"},
+    {"requirement": "TypeScript", "met": False, "explanation": "No TypeScript example"},
+]
+SUGGESTIONS = [{"question": "Which project should I discuss?", "answer": "Discuss your React interface."}]
+
+
+class MatchAnalysisTests(unittest.TestCase):
+    def setUp(self):
+        self.environment = patch.dict("os.environ", TEST_ENV)
+        self.environment.start()
+        self.client = TestClient(main.app)
+        self.create_patch = patch.object(main.client.chat.completions, "create")
+        self.create = self.create_patch.start()
+
+    def tearDown(self):
+        self.create_patch.stop()
+        self.client.close()
+        self.environment.stop()
+
+    def submit(self, description="Build React and TypeScript interfaces.", filename="resume.txt", content=b"Built a React project."):
+        return self.client.post("/upload-resume/", data={"job_description": description},
+                                files={"resume": (filename, content, "application/octet-stream")})
+
+    def test_successful_match_and_qa_preserve_contract(self):
+        self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)]
+        with patch.object(main, "MODEL", "gpt-6-luna"):
+            result = self.submit()
+        self.assertEqual(result.status_code, 200, result.text)
+        data = result.json()
+        self.assertEqual(data["met_requirements"], ["React"])
+        self.assertEqual(data["missing_requirements"], ["TypeScript"])
+        self.assertEqual(data["ai_suggestions"], SUGGESTIONS)
+        self.assertIn("React project listed", data["requirement_explanations"]["React"])
+        self.assertEqual(self.create.call_count, 3)
+        for call, limit in zip(self.create.call_args_list, [4096, 4096, 2048]):
+            self.assertEqual(call.kwargs["model"], "gpt-6-luna")
+            self.assertEqual(call.kwargs["max_completion_tokens"], limit)
+            self.assertEqual(call.kwargs["reasoning_effort"], "none")
+            self.assertNotIn("temperature", call.kwargs)
+            self.assertNotIn("max_tokens", call.kwargs)
+
+    def test_legacy_model_configuration_keeps_compatible_parameters(self):
+        self.create.return_value = response(REQUIREMENTS)
+        with patch.object(main, "MODEL", "gpt-4.1-mini"):
+            self.assertEqual(main.extract_requirements_gpt("Role"), REQUIREMENTS)
+        self.assertEqual(self.create.call_args.kwargs["temperature"], 0.2)
+        self.assertEqual(self.create.call_args.kwargs["max_tokens"], 4096)
+        self.assertNotIn("reasoning_effort", self.create.call_args.kwargs)
+
+    def test_reasoning_options_match_original_and_later_gpt5_models(self):
+        for model in ("gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-mini-2025-08-07"):
+            with self.subTest(model=model), patch.object(main, "MODEL", model):
+                self.assertEqual(main.completion_options(0.2, 4096), {
+                    "max_completion_tokens": 4096, "reasoning_effort": "minimal",
+                })
+        for model in ("gpt-5.1", "gpt-5.6-luna", "gpt-6-luna"):
+            with self.subTest(model=model), patch.object(main, "MODEL", model):
+                self.assertEqual(main.completion_options(0.2, 4096), {
+                    "max_completion_tokens": 4096, "reasoning_effort": "none",
+                })
+
+    def test_provider_failures_are_http_errors_without_raw_exception_or_results(self):
+        cases = [
+            (provider_error(openai.NotFoundError, 404, "model_not_found"), 503, "configured"),
+            (provider_error(openai.AuthenticationError, 401, "invalid_api_key"), 503, "configured"),
+            (provider_error(openai.PermissionDeniedError, 403), 503, "configured"),
+            (provider_error(openai.RateLimitError, 429, "insufficient_quota"), 503, "usage limit"),
+            (provider_error(openai.RateLimitError, 429, "rate_limit_exceeded"), 429, "busy"),
+            (openai.APITimeoutError(request=httpx.Request("POST", "https://api.example.test")), 504, "too long"),
+            (openai.APIConnectionError(request=httpx.Request("POST", "https://api.example.test")), 503, "reached"),
+            (provider_error(openai.InternalServerError, 500), 502, "could not complete"),
+            (provider_error(openai.BadRequestError, 400, "context_length_exceeded"), 422, "too long"),
+            (RuntimeError("private-provider-detail-with-credential"), 500, "couldn’t complete"),
+        ]
+        for error, status, message in cases:
+            with self.subTest(error=type(error).__name__, status=status):
+                self.create.reset_mock()
+                self.create.side_effect = error
+                result = self.submit()
+                self.assertEqual(result.status_code, status, result.text)
+                self.assertIn(message, result.json()["detail"])
+                self.assertNotIn("private-provider-detail", result.text)
+                self.assertNotIn("met_requirements", result.json())
+                self.assertNotIn("ai_suggestions", result.json())
+                self.assertEqual(self.create.call_count, 1)
+
+    def test_invalid_or_empty_input_never_calls_provider(self):
+        cases = [
+            {"description": "   "}, {"content": b"   "},
+            {"filename": "photo.jpg", "content": b"binary"},
+            {"filename": "broken.pdf", "content": b"invalid PDF"},
+            {"filename": "broken.docx", "content": b"invalid document"},
+            {"filename": "broken.txt", "content": b"\xff\xfe"},
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                result = self.submit(**case)
+                self.assertEqual(result.status_code, 422, result.text)
+                self.assertNotIn("ai_suggestions", result.json())
+        self.create.assert_not_called()
+
+    def test_missing_key_is_configuration_error_without_provider_call(self):
+        with patch.object(main, "client", None):
+            result = self.submit()
+        self.assertEqual(result.status_code, 503)
+        self.assertIn("not configured", result.json()["detail"])
+        self.create.assert_not_called()
+
+    def test_valid_empty_extraction_has_specific_input_error_and_stops_pipeline(self):
+        self.create.return_value = response([])
+        result = self.submit()
+        self.assertEqual(result.status_code, 422)
+        self.assertIn("No resume-checkable requirements", result.json()["detail"])
+        self.assertEqual(self.create.call_count, 1)
+
+    def test_malformed_or_truncated_extraction_never_becomes_a_requirement(self):
+        cases = [
+            response("not json"), response({"error": "provider error"}),
+            response(["React"]), response([{"requirement": ""}]),
+            response([{"requirement": "React", "explanation": {"bad": "shape"}}]),
+            response(REQUIREMENTS, finish="length"), response(None),
+        ]
+        for payload in cases:
+            with self.subTest(payload=payload):
+                self.create.reset_mock()
+                self.create.return_value = payload
+                result = self.submit()
+                self.assertEqual(result.status_code, 502, result.text)
+                self.assertNotIn("AI Extraction Error", result.text)
+                self.assertEqual(self.create.call_count, 1)
+
+    def test_fenced_json_and_duplicate_requirements_are_handled(self):
+        duplicate = REQUIREMENTS + [{"requirement": "react", "explanation": "Duplicate"}]
+        self.create.side_effect = [response("```json\n" + json.dumps(duplicate) + "\n```"), response(MATCHES), response([])]
+        result = self.submit()
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()["met_requirements"], ["React"])
+        self.assertEqual(result.json()["missing_requirements"], ["TypeScript"])
+
+    def test_incomplete_unknown_duplicate_or_invalid_matches_fail_instead_of_wrong_score(self):
+        cases = [[], MATCHES[:1], MATCHES + [MATCHES[0]],
+                 [{**MATCHES[0], "met": "true"}, MATCHES[1]],
+                 [{**MATCHES[0], "requirement": "Unrequested skill"}, MATCHES[1]]]
+        for matches in cases:
+            with self.subTest(matches=matches):
+                self.create.reset_mock()
+                self.create.side_effect = [response(REQUIREMENTS), response(matches)]
+                result = self.submit()
+                self.assertEqual(result.status_code, 502, result.text)
+                self.assertEqual(self.create.call_count, 2)
+
+    def test_invalid_qa_is_not_displayed_as_successful_analysis(self):
+        self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response({"error": "private-provider-detail"})]
+        result = self.submit()
+        self.assertEqual(result.status_code, 502)
+        self.assertNotIn("private-provider-detail", result.text)
+        self.assertNotIn("ai_suggestions", result.json())
+
+    def test_no_matched_requirements_is_a_real_success_when_missing_requirements_exist(self):
+        missing = [{**match, "met": False} for match in MATCHES]
+        self.create.side_effect = [response(REQUIREMENTS), response(missing), response([])]
+        result = self.submit()
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["met_requirements"], [])
+        self.assertEqual(result.json()["missing_requirements"], ["React", "TypeScript"])
+
+
+if __name__ == "__main__":
+    unittest.main()

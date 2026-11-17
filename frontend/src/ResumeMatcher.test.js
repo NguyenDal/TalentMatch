@@ -93,11 +93,63 @@ test("shows request errors inline and retains inputs for a retry", async () => {
   expect(screen.getByRole("textbox", { name: "Job description" })).toHaveValue("React and TypeScript development");
 });
 
-test("does not show a misleading percentage when no requirements were identified", async () => {
+test("empty analysis explains that no score was calculated without blaming the posting", async () => {
   axios.post.mockResolvedValueOnce({ data: { met_requirements: [], missing_requirements: [], ai_suggestions: [] } });
   render(<ResumeMatcher />);
   fillInputs(new File(["Resume content"], "experience.txt", { type: "text/plain" }));
   fireEvent.click(screen.getByRole("button", { name: "Find my match" }));
-  expect(await screen.findByLabelText("No requirements identified")).toHaveTextContent("—");
+  expect(await screen.findByRole("alert")).toHaveTextContent("No requirements were returned for this analysis");
+  expect(screen.queryByRole("heading", { name: "See the connection." })).not.toBeInTheDocument();
+  expect(screen.queryByText(/not enough detail/i)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Find my match" })).toBeEnabled();
   expect(screen.queryByText(/NaN|N\/A%/)).not.toBeInTheDocument();
+});
+
+test("legacy provider errors never become an empty match or expose their raw answer", async () => {
+  axios.post.mockResolvedValueOnce({ data: {
+    met_requirements: [], missing_requirements: [], requirement_explanations: {},
+    ai_suggestions: [{ question: "Error", answer: "Error code: 404 - model_not_found: retired gpt-4.1-nano; private-key-content" }],
+  } });
+  render(<ResumeMatcher />);
+  fillInputs();
+  fireEvent.click(screen.getByRole("button", { name: "Find my match" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("The matching service is unavailable");
+  expect(screen.queryByRole("heading", { name: "See the connection." })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Error" })).not.toBeInTheDocument();
+  expect(screen.queryByText(/private-key-content|model_not_found|gpt-4.1-nano/)).not.toBeInTheDocument();
+  expect(screen.getByText("experience.pdf")).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Job description" })).toHaveValue("React and TypeScript development");
+  expect(screen.getByRole("button", { name: "Find my match" })).toBeEnabled();
+  expect(screen.getByRole("list", { name: "Match progress" }).lastElementChild).not.toHaveClass("is-complete");
+});
+
+test.each([
+  ["null body", null],
+  ["missing fields", {}],
+  ["raw top-level error", { error: "private-key-content" }],
+  ["invalid requirement type", { met_requirements: "React", missing_requirements: [] }],
+  ["overlapping classification", { met_requirements: ["React"], missing_requirements: ["React"] }],
+  ["malformed explanation", { met_requirements: ["React"], missing_requirements: [], requirement_explanations: { React: {} } }],
+  ["malformed Q&A", { met_requirements: ["React"], missing_requirements: [], ai_suggestions: [{ question: "How?", answer: {} }] }],
+])("rejects malformed response: %s", async (_name, data) => {
+  axios.post.mockResolvedValueOnce({ data });
+  render(<ResumeMatcher />);
+  fillInputs();
+  fireEvent.click(screen.getByRole("button", { name: "Find my match" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("The matching service is unavailable");
+  expect(screen.queryByRole("heading", { name: "See the connection." })).not.toBeInTheDocument();
+  expect(screen.queryByText(/private-key-content/)).not.toBeInTheDocument();
+});
+
+test("zero matched requirements is a valid zero score when requirements were identified", async () => {
+  axios.post.mockResolvedValueOnce({ data: {
+    met_requirements: [], missing_requirements: ["React"], requirement_explanations: { React: "No React experience found." },
+    ai_suggestions: [],
+  } });
+  render(<ResumeMatcher />);
+  fillInputs();
+  fireEvent.click(screen.getByRole("button", { name: "Find my match" }));
+  expect(await screen.findByLabelText("0% match")).toHaveTextContent("0%");
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByText("0 of 1 requirements")).toBeInTheDocument();
 });

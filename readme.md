@@ -50,6 +50,7 @@ configuration. Never put database credentials in the frontend.
 ```dotenv
 DATABASE_URL="postgresql://USER:PASSWORD@NEON_HOST/talentmatch?sslmode=require&channel_binding=require"
 OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-6-luna
 SECRET_KEY=replace_with_a_random_secret_of_at_least_32_characters
 FRONTEND_URL=http://localhost:3000
 ```
@@ -63,6 +64,38 @@ python -m uvicorn app.main:app --reload
 Without an activated virtual environment on Windows, use
 `py -m uvicorn app.main:app --reload`. The module is `app.main`, because the file
 is `backend/app/main.py`. The API runs at http://localhost:8000.
+
+### AI model and usage
+
+The default model is `gpt-6-luna`, selected for low-cost requirement extraction,
+resume comparison, and application Q&A. Set `OPENAI_MODEL` in the backend
+environment to override it; restart the backend after changing this value.
+Do not use the retired `gpt-4.1-nano` model.
+
+Each match uses three text requests: extract the posting's requirements, compare
+them with the resume, and generate up to three short application Q&A items.
+GPT-6 Luna runs with `reasoning_effort=none`; output is capped at 4,096, 4,096,
+and 2,048 tokens respectively. These are ceilings, not fixed token charges.
+Prompts request concise explanations and avoid duplicate requirements. Profile
+trends use the same model with a 1,024-token output cap.
+
+As of November 16, 2026, standard GPT-6 Luna text pricing is $0.10 per million
+input tokens and $0.50 per million output tokens. For example, a complete match
+using 10,000 input and 3,000 output tokens across its requests costs about
+$0.0025, before any cache savings. Actual usage depends on document lengths and
+generated output. Check the [current model pricing](https://developers.openai.com/api/docs/models/gpt-6-luna)
+before estimating production costs.
+
+Provider outages, model configuration errors, and invalid responses return
+explicit HTTP errors. The interface keeps the selected file and job description
+available for retry; a failed analysis is never displayed as a zero-score match.
+
+Matching regression checks (mocked provider calls, no API credit usage):
+
+```powershell
+# From backend
+python -B -m unittest discover -s tests -p "test_match_analysis.py"
+```
 
 ### 3. Frontend Setup (React)
 Open a new terminal at the repository root:

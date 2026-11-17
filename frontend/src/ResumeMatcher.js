@@ -5,12 +5,33 @@ import { BASE_URL } from "./api";
 import "./ResumeMatcher.css";
 
 const fileSize = (bytes) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+const failedAnalysisMessage = "The matching service is unavailable. Please try again later.";
+const emptyAnalysisMessage = "No requirements were returned for this analysis, so a match score couldn’t be calculated. Please try again.";
+const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const isNonemptyString = (value) => typeof value === "string" && value.trim().length > 0;
+const isErrorLabel = (value) => typeof value === "string" && /^(error|ai extraction error)$/i.test(value.trim());
+
+function matchResultError(data) {
+  // Older servers encoded exceptions inside an otherwise successful response.
+  // Never render their raw exception text as application Q&A.
+  if (!isRecord(data) || data.error || data.detail ||
+    !Array.isArray(data.met_requirements) || !Array.isArray(data.missing_requirements)) return failedAnalysisMessage;
+  const requirements = [...data.met_requirements, ...data.missing_requirements];
+  if (requirements.some((item) => !isNonemptyString(item) || isErrorLabel(item)) ||
+    data.met_requirements.some((item) => data.missing_requirements.includes(item))) return failedAnalysisMessage;
+  if (data.ai_suggestions !== undefined && (!Array.isArray(data.ai_suggestions) ||
+    data.ai_suggestions.some((item) => !isRecord(item) || !isNonemptyString(item.question) ||
+      !isNonemptyString(item.answer) || isErrorLabel(item.question)))) return failedAnalysisMessage;
+  if (data.requirement_explanations != null && (!isRecord(data.requirement_explanations) ||
+    Object.values(data.requirement_explanations).some((item) => typeof item !== "string"))) return failedAnalysisMessage;
+  return requirements.length ? "" : emptyAnalysisMessage;
+}
 
 export default function ResumeMatcher() {
   const fileInput = useRef(null);
   const [resumeFile, setResumeFile] = useState(null);
   const [jobDesc, setJobDesc] = useState("");
-  const [result, setResult] = useState(null);
+  const [rawResult, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [fileError, setFileError] = useState("");
@@ -18,6 +39,10 @@ export default function ResumeMatcher() {
   const [expandedReq, setExpandedReq] = useState(null);
   const [userMet, setUserMet] = useState([]);
   const [userMissing, setUserMissing] = useState([]);
+  // Also validate results already in state after a frontend update.
+  const resultError = rawResult ? matchResultError(rawResult) : "";
+  const result = resultError ? null : rawResult;
+  const displayedError = error || resultError;
 
   const originalMet = [...new Set(result?.met_requirements || [])];
   const originalMissing = [...new Set(result?.missing_requirements || [])];
@@ -73,7 +98,8 @@ export default function ResumeMatcher() {
       const { data } = await axios.post(`${BASE_URL}/upload-resume/`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      if (data.error) setError(typeof data.error === "string" ? data.error : "We couldn’t complete this match. Please try again.");
+      const responseError = matchResultError(data);
+      if (responseError) setError(responseError);
       else setResult(data);
     } catch (err) {
       const detail = err.response?.data?.detail;
@@ -191,7 +217,7 @@ export default function ResumeMatcher() {
             {loading ? "Finding your match…" : result ? "Check match again" : "Find my match"}<FiArrowUpRight aria-hidden="true" />
           </button>
         </div>
-        {error && <p role="alert" className="tm-workspace-error"><FiAlertCircle aria-hidden="true" /> {error}</p>}
+        {displayedError && <p role="alert" className="tm-workspace-error"><FiAlertCircle aria-hidden="true" /> {displayedError}</p>}
       </form>
 
       {!result && <section className="tm-workspace-outcomes" aria-label="What your match includes">
@@ -207,7 +233,7 @@ export default function ResumeMatcher() {
           <div className="tm-workspace-score-ring" style={{ "--match-progress": `${score}%` }} aria-label={requirementsTotal ? `${score}% match` : "No requirements identified"}>
             <span><strong>{requirementsTotal ? score : "—"}{requirementsTotal > 0 && <small>%</small>}</strong><em>MATCH</em></span>
           </div>
-          <div className="tm-workspace-score-copy"><h3>{requirementsTotal ? "Your experience, in perspective." : "There’s not enough detail for a score yet."}</h3><p>{requirementsTotal ? <><strong>{effectiveMet.length} of {requirementsTotal} requirements</strong> align with your experience. Explore each one below to see the reasoning and adjust anything that needs context.</> : "Try a job description with clear responsibilities and qualifications, then check your match again."}</p>{(userMet.length > 0 || userMissing.length > 0) && <span className="tm-workspace-adjusted">Includes your adjustments</span>}</div>
+          <div className="tm-workspace-score-copy"><h3>Your experience, in perspective.</h3><p><strong>{effectiveMet.length} of {requirementsTotal} requirements</strong> align with your experience. Explore each one below to see the reasoning and adjust anything that needs context.</p>{(userMet.length > 0 || userMissing.length > 0) && <span className="tm-workspace-adjusted">Includes your adjustments</span>}</div>
           <div className="tm-workspace-score-stats"><span><strong>{effectiveMet.length}</strong> strengths</span><span><strong>{effectiveMissing.length}</strong> to explore</span></div>
         </div>
 

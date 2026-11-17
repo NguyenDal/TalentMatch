@@ -22,7 +22,7 @@
 .tm-workspace button, .tm-workspace input, .tm-workspace textarea { font: inherit; }
 .tm-workspace button { cursor: pointer; }
 .tm-workspace button:disabled, .tm-workspace input:disabled { cursor: default; }
-.tm-workspace button:focus-visible, .tm-workspace textarea:focus-visible { outline: 3px solid var(--workspace-accent); outline-offset: 4px; }
+.tm-workspace button:focus-visible { outline: 3px solid var(--workspace-accent); outline-offset: 4px; }
 .tm-workspace-heading { display: flex; justify-content: space-between; align-items: center; gap: 28px; margin-bottom: 35px; }
 .tm-workspace-eyebrow { display: flex; align-items: center; gap: 9px; margin: 0; color: var(--workspace-accent); font-size: 9px; font-weight: 750; letter-spacing: 1.65px; line-height: 1.6; }
 .tm-workspace-eyebrow > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
@@ -65,9 +65,14 @@
 .tm-workspace-tip p { color: var(--workspace-muted); font-size: 11px; line-height: 1.85; margin: 0; }
 .tm-workspace-tip strong { font-weight: 550; color: var(--workspace-ink); }
 .tm-workspace-field-label { display: block; font-size: 11px; font-weight: 600; margin-bottom: 9px; }
-.tm-workspace-job textarea { width: 100%; min-height: 239px; display: block; resize: vertical; border: 1px solid var(--workspace-border); border-radius: 10px; padding: 16px; color: var(--workspace-ink); background: var(--workspace-bg); font-size: 12px; line-height: 1.9; }
+.tm-workspace-job textarea { width: 100%; min-height: 239px; display: block; resize: vertical; border: 1px solid var(--workspace-border); border-radius: 10px; padding: 16px; color: var(--workspace-ink); background: var(--workspace-bg); font-size: 12px; line-height: 1.9; scrollbar-width: thin; scrollbar-color: #8e76c5 var(--workspace-bg); transition: border-color .15s ease; }
 .tm-workspace-job textarea::placeholder { color: var(--workspace-muted); opacity: .85; }
-.tm-workspace-job textarea:focus { border-color: var(--workspace-accent); }
+.tm-workspace-job textarea:focus { border-color: #8e76c5; outline: 1px solid #8e76c5; outline-offset: 0; box-shadow: none; }
+.tm-workspace-job textarea::-webkit-scrollbar { width: 6px; height: 6px; }
+.tm-workspace-job textarea::-webkit-scrollbar-track, .tm-workspace-job textarea::-webkit-scrollbar-corner { background: var(--workspace-bg); }
+.tm-workspace-job textarea::-webkit-scrollbar-thumb { border-radius: 8px; background: #8e76c5; }
+.tm-workspace-job textarea::-webkit-scrollbar-thumb:hover { background: var(--workspace-accent); }
+.tm-workspace-job textarea::-webkit-scrollbar-button { display: none; }
 .tm-workspace-job-meta { display: flex; justify-content: space-between; gap: 14px; color: var(--workspace-muted); font-size: 10px; line-height: 1.65; margin-top: 11px; }
 .tm-workspace-job-meta > span:last-child { white-space: nowrap; }
 .tm-workspace-action-bar { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 23px 0; }

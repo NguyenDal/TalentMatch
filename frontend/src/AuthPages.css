@@ -47,7 +47,7 @@
 .tm-auth-options > a { color: var(--auth-accent); font-size: 11px; font-weight: 600; min-height: 30px; display: inline-flex; align-items: center; }
 .tm-auth-submit { min-height: 50px; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 14px; border: 0; border-radius: 8px; padding: 12px 20px; font-size: 13px; font-weight: 650; color: #fff; background: #7152e8; box-shadow: 0 4px 12px #7152e819; cursor: pointer; transition: background 160ms ease; }
 .tm-auth-submit:hover { background: #6041d0; }
-.tm-auth-submit:disabled { opacity: .65; cursor: wait; }
+.tm-auth-submit:disabled { opacity: .65; cursor: default; }
 .tm-auth-submit svg { width: 17px; height: 17px; }
 .tm-auth-switch { margin: 25px 0 0; padding-top: 23px; border-top: 1px solid var(--auth-border); text-align: center; color: var(--auth-muted); font-size: 12px; line-height: 1.8; }
 .tm-auth-switch a { color: var(--auth-accent); font-weight: 650; }

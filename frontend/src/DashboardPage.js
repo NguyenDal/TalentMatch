@@ -46,14 +46,9 @@ export default function DashboardPage() {
           },
         });
 
-        // Build display name from first + last; fall back to username
-        const displayName =
-          [res.data.first_name, res.data.last_name].filter(Boolean).join(" ").trim() ||
-          res.data.username;
-
         setUser({
           avatar: res.data.profile_image_url,
-          name: displayName,
+          name: res.data.username,
           nickname: "@" + res.data.username,
           stats: { posts: 289, followers: "Lorem", following: "45 Ipsum" },
         });

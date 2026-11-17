@@ -16,7 +16,7 @@ A web app to check how well your resume matches a job description, see detailed 
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+
 - Node.js (v16+ recommended)
 - npm (comes with Node.js)
 - [OpenAI API Key](https://platform.openai.com/)
@@ -50,6 +50,8 @@ configuration. Never put database credentials in the frontend.
 ```dotenv
 DATABASE_URL="postgresql://USER:PASSWORD@NEON_HOST/talentmatch?sslmode=require&channel_binding=require"
 OPENAI_API_KEY=your_openai_api_key_here
+SECRET_KEY=replace_with_a_random_secret_of_at_least_32_characters
+FRONTEND_URL=http://localhost:3000
 ```
 
 Start the server from `backend`:
@@ -77,6 +79,79 @@ Open a new terminal at the repository root:
 - Click Check Match.
 
 - Review your match score, see detailed requirement breakdown, and use the fit Q&A for preparation.
+
+### Google sign-in and account setup
+
+Create a **Web application** OAuth client in Google Cloud under a TalentMatch
+project. Configure its consent screen and authorize this exact local redirect
+(including the trailing slash):
+
+```text
+http://localhost:8000/auth/google/callback/
+```
+
+Keep the credentials in `backend/.env` only:
+
+```dotenv
+GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback/
+FRONTEND_URL=http://localhost:3000
+GOOGLE_COOKIE_SAMESITE=lax
+```
+
+Install the backend requirements, then migrate the database **before** running
+the updated app. Test the migration on an isolated database branch first. For
+Neon, use a direct connection for this command, supplied as `DATABASE_URL` in
+the process environment; continue using the pooled URL for application traffic.
+
+```powershell
+cd backend
+python -B -m app.migrate_google_auth
+python -m uvicorn app.main:app --reload
+```
+
+The migration is transactional and can be run again. It removes `first_name`
+and `last_name`, allows a null password hash, adds Google identity and temporary
+authentication tables, and enforces case-insensitive username/email uniqueness.
+It stops without merging accounts if existing names or emails collide.
+Restart the backend after changing OAuth credentials or other environment values.
+
+Both Login and Signup offer **Continue with Google**. New Google users choose
+only a unique username (3–30 letters, digits, or underscores); availability is
+checked live and enforced again in PostgreSQL. Their accounts have no password
+until they use **Settings → Set password**. Google names and photos are not stored.
+
+An existing email requires explicit link confirmation. Verified local accounts
+retain their password. If an unverified local email is reclaimed through an
+authoritative Google identity, the confirmation explains that the old password
+is removed and prior sessions are revoked. Google accounts using non-Gmail,
+non-Workspace email must prove the existing local password before linking.
+
+The backend requests only `openid email`, verifies the Google identity token,
+and binds one-time state and completion tickets to an HttpOnly browser cookie.
+The frontend accepts popup messages only from the configured API origin and
+the popup it opened. Secrets and authentication tickets never appear in redirect
+URLs. The OAuth callback authorization code is exchanged by the backend.
+
+For deployment, add the exact HTTPS backend callback in Google Cloud, set
+`GOOGLE_REDIRECT_URI` and `FRONTEND_URL` to the deployed URLs, and build the
+frontend with `REACT_APP_API_URL=https://your-api.example.com`. Prefer frontend
+and API domains under the same site. If they are on different sites, set
+`GOOGLE_COOKIE_SAMESITE=none` with an HTTPS callback; browsers that block third-party
+cookies may still prevent completion, so a same-site API/reverse proxy is preferable.
+Use Google's Audience settings to manage test access and complete branding
+requirements before publishing the OAuth app for general use.
+
+Auth regression checks:
+
+```powershell
+# From backend
+python -B -m unittest discover -s tests -p "test_google_auth.py"
+# From frontend
+npm test -- --watchAll=false --runInBand
+npm run build
+```
 
 ### 4. Troubleshooting
 #### CORS error?

@@ -71,6 +71,7 @@ const App = () => {
   if (user) {
     // Logged in: use React Router for main app, so profile links work!
     return (
+      <div className="tm-app-shell">
       <Routes>
         <Route path="/" element={<MainContent />} />
         <Route
@@ -96,6 +97,7 @@ const App = () => {
         <Route path="/contact" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </div>
     );
   }
 

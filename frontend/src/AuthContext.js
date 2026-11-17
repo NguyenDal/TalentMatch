@@ -17,7 +17,7 @@ function isTokenExpired(token) {
     if (!token) return true;
     try {
         const [, payload] = token.split(".");
-        const decoded = JSON.parse(window.atob(payload));
+        const decoded = JSON.parse(window.atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
         if (!decoded.exp) return false; // if token has no exp we treat it as non-expiring
         const nowInSeconds = Date.now() / 1000;
         return decoded.exp < nowInSeconds;
@@ -76,7 +76,11 @@ export function AuthProvider({ children }) {
         const interceptor = axios.interceptors.response.use(
             (response) => response,
             (error) => {
-                if (error?.response?.status === 401) {
+                // Invalid credentials and pending Google challenges belong to the
+                // form. Only an authenticated, protected request expires a session.
+                const requestPath = new URL(error?.config?.url || "/", BASE_URL).pathname;
+                const publicAuthRequest = /^\/(?:auth\/|login\/?$|register\/?$)/.test(requestPath);
+                if (error?.response?.status === 401 && !publicAuthRequest && getStoredAuth()) {
                     logout();
                     // Hard redirect so all state is reset.
                     window.location.href = "/";

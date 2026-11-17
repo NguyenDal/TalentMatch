@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Index, func
 from app.database import Base
 from datetime import datetime, timedelta
 import secrets
@@ -10,10 +10,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-
-    first_name = Column(String, nullable=True)
-    last_name = Column(String, nullable=True)
+    # Google-first accounts do not have a password until their owner sets one.
+    hashed_password = Column(String, nullable=True)
 
     profile_image_url = Column(String, nullable=True)
     profession = Column(String, nullable=True)
@@ -26,11 +24,6 @@ class User(Base):
     email_verified = Column(Boolean, default=False, nullable=False)
     email_verification_code = Column(String, nullable=True)
     email_verification_expires_at = Column(DateTime, nullable=True)
-
-    @property
-    def full_name(self) -> str:
-        parts = [self.first_name or "", self.last_name or ""]
-        return " ".join([p for p in parts if p]).strip()
 
     def generate_reset_token(self, expires_in=3600):
         self.reset_token = secrets.token_urlsafe(32)
@@ -99,3 +92,46 @@ class UserSession(Base):
     ip = Column(String(45))
     user_agent = Column(Text)
     location = Column(String(255))
+
+
+# Case-insensitive uniqueness also protects concurrent registrations.
+Index("uq_users_username_normalized", func.lower(func.trim(User.username)), unique=True)
+Index("uq_users_email_normalized", func.lower(func.trim(User.email)), unique=True)
+
+
+class GoogleIdentity(Base):
+    __tablename__ = "google_identities"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    subject = Column(String(255), nullable=False, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class GoogleAuthFlow(Base):
+    __tablename__ = "google_auth_flows"
+
+    state_hash = Column(String(64), primary_key=True)
+    browser_hash = Column(String(64), nullable=False)
+    code_verifier = Column(String(128), nullable=False)
+    nonce_hash = Column(String(64), nullable=False)
+    remember = Column(Boolean, nullable=False, default=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    consumed_at = Column(DateTime, nullable=True)
+
+
+class GoogleAuthTicket(Base):
+    __tablename__ = "google_auth_tickets"
+
+    token_hash = Column(String(64), primary_key=True)
+    browser_hash = Column(String(64), nullable=False)
+    kind = Column(String(10), nullable=False)
+    subject = Column(String(255), nullable=False)
+    email = Column(String(320), nullable=False)
+    authoritative_email = Column(Boolean, nullable=False)
+    target_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    account_fingerprint = Column(String(64), nullable=True)
+    remember = Column(Boolean, nullable=False, default=False)
+    failed_attempts = Column(Integer, nullable=False, default=0)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    consumed_at = Column(DateTime, nullable=True)

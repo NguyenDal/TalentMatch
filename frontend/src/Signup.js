@@ -1,22 +1,25 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
-import { FiArrowRight, FiLock, FiMail, FiUser } from "react-icons/fi";
+import { FiArrowRight, FiLock, FiMail } from "react-icons/fi";
 import { BASE_URL } from "./api";
 import AuthLayout from "./AuthLayout";
 import AuthField, { AuthError } from "./AuthField";
+import GoogleAuth from "./GoogleAuth";
+import UsernameField from "./UsernameField";
+import useUsernameAvailability from "./useUsernameAvailability";
 
 export default function Signup({ onLogin }) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const availability = useUsernameAvailability(username);
 
   const handleSignup = async (event) => {
     event.preventDefault();
+    if (!availability.available || loading) return;
     setErr("");
     setLoading(true);
     try {
@@ -24,8 +27,6 @@ export default function Signup({ onLogin }) {
       params.append("username", username);
       params.append("email", email);
       params.append("password", password);
-      params.append("first_name", firstName);
-      params.append("last_name", lastName);
 
       await axios.post(BASE_URL + "/register/", params, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -54,6 +55,7 @@ export default function Signup({ onLogin }) {
       title="Create your account."
       subtitle="Bring your experience. Let's find where it fits."
     >
+      <GoogleAuth disabled={loading} />
       <form
         className="tm-auth-form"
         onSubmit={handleSignup}
@@ -61,39 +63,9 @@ export default function Signup({ onLogin }) {
         aria-describedby={err ? "auth-error signup-fields-note" : "signup-fields-note"}
       >
         <p className="tm-auth-form-note" id="signup-fields-note">All fields are required.</p>
-        <div className="tm-auth-name-row">
-          <AuthField
-            id="signup-first-name"
-            name="first_name"
-            label="First name"
-            placeholder="First name"
-            autoComplete="given-name"
-            value={firstName}
-            onChange={(event) => setFirstName(event.target.value)}
-            disabled={loading}
-            required
-          />
-          <AuthField
-            id="signup-last-name"
-            name="last_name"
-            label="Last name"
-            placeholder="Last name"
-            autoComplete="family-name"
-            value={lastName}
-            onChange={(event) => setLastName(event.target.value)}
-            disabled={loading}
-            required
-          />
-        </div>
-        <AuthField
+        <UsernameField
           id="signup-username"
-          name="username"
-          label="Username"
-          icon={FiUser}
-          placeholder="Choose a username"
-          autoComplete="username"
-          autoCapitalize="none"
-          spellCheck={false}
+          availability={availability}
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           disabled={loading}
@@ -120,13 +92,14 @@ export default function Signup({ onLogin }) {
           icon={FiLock}
           placeholder="Create a password"
           autoComplete="new-password"
+          minLength={8}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           disabled={loading}
           required
         />
         <AuthError error={err} />
-        <button className="tm-auth-submit" type="submit" disabled={loading}>
+        <button className="tm-auth-submit" type="submit" disabled={loading || !availability.available}>
           {loading ? "Creating your account..." : "Create account"}
           {!loading && <FiArrowRight aria-hidden="true" />}
         </button>

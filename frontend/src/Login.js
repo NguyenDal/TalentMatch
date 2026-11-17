@@ -4,6 +4,7 @@ import { FiArrowRight, FiLock, FiUser } from "react-icons/fi";
 import { useAuth } from "./AuthContext";
 import AuthLayout from "./AuthLayout";
 import AuthField, { AuthError } from "./AuthField";
+import GoogleAuth from "./GoogleAuth";
 
 export default function Login() {
   const { login } = useAuth();
@@ -35,6 +36,7 @@ export default function Login() {
       title="Welcome back."
       subtitle="Log in to pick up where you left off and find your next opportunity."
     >
+      <GoogleAuth remember={remember} disabled={loading} />
       <form
         className="tm-auth-form"
         onSubmit={handleLogin}

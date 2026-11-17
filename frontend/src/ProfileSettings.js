@@ -1,9 +1,10 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Routes, Route, NavLink, useNavigate } from "react-router-dom";
+import { Routes, Route, NavLink, Navigate, useNavigate } from "react-router-dom";
 import { FiArrowLeft } from "react-icons/fi";
 import axios from "axios";
 import { BASE_URL } from "./api";
 import { useAuth } from "./AuthContext";
+import AccountPasswordForm from "./AccountPasswordForm";
 
 function ProfileDetails() {
   const fileInput = useRef();
@@ -12,8 +13,6 @@ function ProfileDetails() {
   const { user: authUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [avatar, setAvatar] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [profession, setProfession] = useState("");
   const [bio, setBio] = useState("");
@@ -31,8 +30,6 @@ function ProfileDetails() {
         });
 
         setAvatar(res.data.profile_image_url || "");
-        setFirstName(res.data.first_name || "");
-        setLastName(res.data.last_name || "");
         setEmail(res.data.email || "");
         setProfession(res.data.profession || "");
         setBio(res.data.bio || "");
@@ -76,6 +73,9 @@ function ProfileDetails() {
       });
       if (res.data?.profile_image_url) {
         setAvatar(res.data.profile_image_url);
+        window.dispatchEvent(new CustomEvent("talentmatch:profile-image-updated", {
+          detail: { url: res.data.profile_image_url },
+        }));
         showMessage("Profile image updated.", "success");
       } else {
         setAvatar(prevAvatar);
@@ -102,6 +102,7 @@ function ProfileDetails() {
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      window.dispatchEvent(new CustomEvent("talentmatch:profile-image-updated", { detail: { url: "" } }));
       showMessage("Profile image removed.", "success");
     } catch {
       setAvatar(prevAvatar);
@@ -120,8 +121,6 @@ function ProfileDetails() {
       const token = authUser?.token || localStorage.getItem("token");
 
       const form = new FormData();
-      form.append("first_name", firstName);
-      form.append("last_name", lastName);
       form.append("email", email);
       form.append("profession", profession);
       form.append("bio", bio);
@@ -192,28 +191,6 @@ function ProfileDetails() {
               Delete picture
             </button>
           </div>
-        </div>
-        <div className="col-span-1">
-          <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
-            First name
-          </label>
-          <input
-            type="text"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
-          />
-        </div>
-        <div className="col-span-1">
-          <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
-            Last name
-          </label>
-          <input
-            type="text"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
-          />
         </div>
         <div className="col-span-2">
           <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
@@ -644,12 +621,6 @@ function Security() {
   const { user: authUser, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Change password state
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [changingPw, setChangingPw] = useState(false);
-
   // Login activity state
   const [loginEvents, setLoginEvents] = useState([]);
   const [loadingLogins, setLoadingLogins] = useState(true);
@@ -839,53 +810,6 @@ function Security() {
     }
   };
 
-  // Handle change password
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
-
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      showMessage("Please fill in all password fields.", "error");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      showMessage("New password and confirmation do not match.", "error");
-      return;
-    }
-
-    setChangingPw(true);
-    showMessage("");
-
-    try {
-      const token = authUser?.token || localStorage.getItem("token");
-      const form = new FormData();
-      form.append("current_password", currentPassword);
-      form.append("new_password", newPassword);
-
-      const res = await axios.post(
-        `${BASE_URL}/account/change-password/`,
-        form,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      showMessage(
-        res.data?.message || "Password changed successfully.",
-        "success"
-      );
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (err) {
-      console.error(err);
-      const detail =
-        err?.response?.data?.detail || "Failed to change password.";
-      showMessage(detail, "error");
-    } finally {
-      setChangingPw(false);
-    }
-  };
-
   return (
     <div className="max-w-3xl text-black dark:text-gray-100">
       {msg && (
@@ -900,64 +824,7 @@ function Security() {
         </div>
       )}
 
-      {/* 1. Change password */}
-      <section className="mb-10">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
-          Change password
-        </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Update your password to keep your account secure.
-        </p>
-
-        <form className="space-y-4" onSubmit={handleChangePassword}>
-          <div>
-            <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
-              Current password
-            </label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
-                New password
-              </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 dark:text-gray-200 font-medium mb-1">
-                Confirm new password
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 bg-white dark:bg-gray-800 text-black dark:text-gray-100"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-2 rounded-md font-semibold transition"
-              disabled={changingPw}
-            >
-              {changingPw ? "Updating..." : "Update password"}
-            </button>
-          </div>
-        </form>
-      </section>
+      <AccountPasswordForm />
 
       {/* 2. Recent logins */}
       <section className="mb-10 border-t border-gray-200 dark:border-gray-800 pt-6">
@@ -1161,10 +1028,12 @@ export default function ProfileSettings() {
         <section className="flex-1 px-16 py-12 min-w-0 flex flex-col">
           <Routes>
             {/* use nested (relative) paths under /dashboard/settings/* */}
+            <Route index element={<Navigate to="/dashboard/settings/profile" replace />} />
             <Route path="profile" element={<ProfileDetails />} />
             <Route path="account" element={<AccountSettings />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="security" element={<Security />} />
+            <Route path="*" element={<Navigate to="/dashboard/settings/profile" replace />} />
           </Routes>
         </section>
       </div>

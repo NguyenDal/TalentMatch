@@ -22,6 +22,9 @@ python-multipart
 passlib[bcrypt]
 python-jose[cryptography]
 PyJWT
+google-auth
+requests
+httpx
 
 # --- Email & password reset ---
 fastapi-mail

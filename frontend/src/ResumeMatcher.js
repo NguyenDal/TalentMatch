@@ -1,306 +1,227 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import axios from "axios";
+import { FiAlertCircle, FiArrowRight, FiArrowUpRight, FiBriefcase, FiCheck, FiCheckCircle, FiChevronDown, FiFileText, FiLoader, FiMessageSquare, FiPlus, FiTarget, FiUploadCloud, FiX } from "react-icons/fi";
 import { BASE_URL } from "./api";
+import "./ResumeMatcher.css";
 
-// ResumeMatcher component handles the resume-job matching functionality.
-const ResumeMatcher = () => {
-  // === State variables ===
-  const [resumeFile, setResumeFile] = useState(null);   // Stores the uploaded resume file.
-  const [jobDesc, setJobDesc] = useState("");           // Stores the pasted job description.
-  const [result, setResult] = useState(null);           // Stores the result returned from the backend.
-  const [loading, setLoading] = useState(false);        // Indicates whether the matching process is in progress.
-  const [expandedReq, setExpandedReq] = useState(null); // Tracks which requirement is expanded for details.
-  const [userMet, setUserMet] = useState([]);           // Tracks requirements manually marked as "met" by the user.
-  const [userMissing, setUserMissing] = useState([]);   // Tracks requirements manually marked as "missing" by the user.
+const fileSize = (bytes) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
-  // === Calculate matching logic for UI scoring ===
-  const originalMet = result?.met_requirements || [];   // Requirements initially marked as "met" by the backend.
-  const originalMissing = result?.missing_requirements || []; // Requirements initially marked as "missing" by the backend.
+export default function ResumeMatcher() {
+  const fileInput = useRef(null);
+  const [resumeFile, setResumeFile] = useState(null);
+  const [jobDesc, setJobDesc] = useState("");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [fileError, setFileError] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const [expandedReq, setExpandedReq] = useState(null);
+  const [userMet, setUserMet] = useState([]);
+  const [userMissing, setUserMissing] = useState([]);
 
-  // Combine backend results with user overrides for "met" and "missing" requirements.
-  const effectiveMet = [
-    ...originalMet,
-    ...userMet.filter(req => !originalMet.includes(req)),
-  ].filter(req => !userMissing.includes(req));
-  const effectiveMissing = [
-    ...originalMissing,
-    ...userMissing.filter(req => !originalMissing.includes(req)),
-  ].filter(req => !userMet.includes(req));
+  const originalMet = [...new Set(result?.met_requirements || [])];
+  const originalMissing = [...new Set(result?.missing_requirements || [])];
+  const effectiveMet = [...new Set([...originalMet, ...userMet])].filter(req => !userMissing.includes(req));
+  const effectiveMissing = [...new Set([...originalMissing, ...userMissing])].filter(req => !userMet.includes(req));
+  const requirementsTotal = new Set([...originalMet, ...originalMissing]).size;
+  const score = requirementsTotal ? Math.round((effectiveMet.length / requirementsTotal) * 1000) / 10 : 0;
+  const ready = Boolean(resumeFile && jobDesc.trim());
+  const wordCount = jobDesc.trim() ? jobDesc.trim().split(/\s+/).length : 0;
 
-  // Calculate the total number of requirements and the percentage of requirements met.
-  const allRequirements = [...originalMet, ...originalMissing].filter(
-    (v, i, a) => a.indexOf(v) === i
-  );
-  const requirementsMetCount = effectiveMet.length;
-  const requirementsTotal = allRequirements.length;
-  const requirementsMetScore =
-    requirementsTotal > 0
-      ? ((requirementsMetCount / requirementsTotal) * 100).toFixed(1)
-      : "N/A";
-
-  // === Renders each requirement as a card/box ===
-  const renderRequirementBox = (req, isMet) => (
-    <div
-      key={req}
-      className={`border ${
-        isMet
-          ? "border-green-400 bg-green-50 text-green-900 dark:border-green-500 dark:bg-green-900/30 dark:text-green-100"
-          : "border-red-400 bg-red-50 text-red-900 dark:border-red-500 dark:bg-red-900/30 dark:text-red-100"
-      } rounded-lg px-5 py-3 font-medium transition-all mb-2`}
-    >
-      {/* Button to toggle the expanded view of the requirement */}
-      <button
-        className="w-full text-left font-medium focus:outline-none"
-        onClick={() => setExpandedReq(expandedReq === req ? null : req)}
-      >
-        {req}
-      </button>
-      {/* Expanded view showing additional details about the requirement */}
-      {expandedReq === req && (
-        <div
-          className={`px-2 pb-2 pt-1 text-gray-800 dark:text-gray-100 text-base leading-relaxed ${
-            isMet
-              ? "bg-green-50 border-t border-green-200 dark:bg-green-950/40 dark:border-green-700"
-              : "bg-red-50 border-t border-red-200 dark:bg-red-950/40 dark:border-red-700"
-          } rounded-b-lg`}
-        >
-          <div className="mb-2 font-normal">
-            {result.requirement_explanations?.[req] || "Loading explanation..."}
-          </div>
-          <div className="flex gap-2 mt-1">
-            {/* Button to mark the requirement as "met" */}
-            <button
-              className="px-3 py-1 rounded bg-green-200 text-green-800 hover:bg-green-300 dark:bg-green-800 dark:text-green-100 dark:hover:bg-green-700 font-semibold"
-              onClick={() => {
-                setUserMet(prev => Array.from(new Set([...prev, req])));
-                setUserMissing(prev => prev.filter(x => x !== req));
-                setExpandedReq(null);
-              }}
-            >
-              Yes, I meet this
-            </button>
-            {/* Button to mark the requirement as "missing" */}
-            <button
-              className="px-3 py-1 rounded bg-red-200 text-red-800 hover:bg-red-300 dark:bg-red-800 dark:text-red-100 dark:hover:bg-red-700 font-semibold"
-              onClick={() => {
-                setUserMissing(prev => Array.from(new Set([...prev, req])));
-                setUserMet(prev => prev.filter(x => x !== req));
-                setExpandedReq(null);
-              }}
-            >
-              No, I don’t
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  // === Handle file input change ===
-  const handleFileChange = (e) => {
-    setResumeFile(e.target.files[0]); // Update the resume file state.
-    setResult(null);                 // Clear previous results.
-    setUserMet([]);                  // Reset user overrides for "met" requirements.
-    setUserMissing([]);              // Reset user overrides for "missing" requirements.
+  const clearResult = () => {
+    setResult(null);
+    setError("");
+    setUserMet([]);
+    setUserMissing([]);
+    setExpandedReq(null);
   };
 
-  // === Handle job description input change ===
-  const handleJobDescChange = (e) => {
-    setJobDesc(e.target.value);      // Update the job description state.
-    setResult(null);                 // Clear previous results.
-    setUserMet([]);                  // Reset user overrides for "met" requirements.
-    setUserMissing([]);              // Reset user overrides for "missing" requirements.
-  };
-
-  // === Main form submit handler ===
-  const handleSubmit = async (e) => {
-    e.preventDefault(); // Prevent the default form submission behavior.
-    if (!resumeFile || !jobDesc) {
-      alert("Please upload your resume and paste the job description."); // Alert if inputs are missing.
+  const chooseFile = (files) => {
+    if (loading || !files?.length) return;
+    if (files.length !== 1) {
+      setFileError("Choose one resume at a time.");
       return;
     }
-    setLoading(true); // Set loading state to true while processing the request.
-    const formData = new FormData();
-    formData.append("resume", resumeFile); // Append the resume file to the form data.
-    formData.append("job_description", jobDesc); // Append the job description to the form data.
+    const file = files[0];
+    if (!/\.(pdf|docx|txt)$/i.test(file.name)) {
+      setFileError("Please choose a PDF, DOCX, or TXT file.");
+      if (fileInput.current) fileInput.current.value = "";
+      return;
+    }
+    setResumeFile(file);
+    setFileError("");
+    clearResult();
+  };
 
+  const removeFile = () => {
+    setResumeFile(null);
+    setFileError("");
+    if (fileInput.current) fileInput.current.value = "";
+    clearResult();
+    fileInput.current?.focus();
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!ready || loading) return;
+    setLoading(true);
+    clearResult();
+    const formData = new FormData();
+    formData.append("resume", resumeFile);
+    formData.append("job_description", jobDesc);
     try {
-      // Send the form data to the backend for processing.
-      const res = await axios.post(`${BASE_URL}/upload-resume/`, formData, {
+      const { data } = await axios.post(`${BASE_URL}/upload-resume/`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setResult(res.data); // Update the result state with the backend response.
-      setUserMet([]);      // Reset user overrides for "met" requirements.
-      setUserMissing([]);  // Reset user overrides for "missing" requirements.
+      if (data.error) setError(typeof data.error === "string" ? data.error : "We couldn’t complete this match. Please try again.");
+      else setResult(data);
     } catch (err) {
-      // Handle errors during the request.
-      setResult({ error: "There was a problem processing your request." });
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : "We couldn’t complete this match. Please try again in a moment.");
     } finally {
-      setLoading(false); // Reset the loading state.
+      setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 to-purple-200 dark:from-gray-900 dark:to-gray-950 py-10">
-      {/* Main container for the Resume Matcher */}
-      <div
-        className="bg-white dark:bg-gray-900 dark:text-gray-100 rounded-2xl shadow-2xl px-10 py-14 sm:px-20 sm:py-16 max-w-6xl w-full mb-40 transition-all duration-200 relative"
-        style={{ minHeight: "500px" }}
-      >
-        <h1 className="text-4xl font-bold text-center text-blue-600 dark:text-blue-300 mb-2">
-          Resume Job Matching
-        </h1>
-        <h2 className="text-xl text-center text-gray-700 dark:text-gray-300 mb-8">
-          AI-Powered Fit Analysis &amp; Q&amp;A
-        </h2>
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* === Resume Upload Section === */}
-          <div>
-            <label className="block font-semibold text-gray-700 dark:text-gray-200 mb-1 text-base">
-              Upload your Resume{" "}
-              <span className="text-xs text-gray-500 dark:text-gray-400">(.pdf, .docx, .txt)</span>:
-            </label>
-            <input
-              type="file"
-              accept=".pdf,.docx,.txt" // Accept specific file types.
-              onChange={handleFileChange}
-              className="block w-full text-base text-gray-600 dark:text-gray-200
-                file:mr-4 file:py-2 file:px-4
-                file:rounded-lg file:border-0
-                file:text-base file:font-semibold
-                file:bg-blue-50 file:text-blue-700
-                hover:file:bg-blue-100
-                dark:file:bg-gray-800 dark:file:text-blue-200
-              "
-            />
-          </div>
-          {/* === Job Description Paste Section === */}
-          <div>
-            <label className="block font-semibold text-gray-700 dark:text-gray-200 mb-1 text-base">
-              Paste Job Description:
-            </label>
-            <textarea
-              rows={7}
-              value={jobDesc}
-              onChange={handleJobDescChange}
-              placeholder="Paste the job description here..."
-              className="w-full p-4 rounded-lg border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500 resize-vertical text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-              required
-              style={{ minHeight: "120px" }}
-            />
-          </div>
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="w-full py-4 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white text-lg font-bold rounded-lg shadow transition disabled:opacity-70 disabled:cursor-not-allowed"
-            disabled={loading}
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="inline-block h-5 w-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                Checking...
-              </span>
-            ) : (
-              "Check Match"
-            )}
-          </button>
-        </form>
-        {/* === Display Result Section === */}
-        {result && (
-          <div className="mt-10 p-8 bg-blue-50 dark:bg-gray-900/60 rounded-xl border border-blue-200 dark:border-gray-700 text-blue-800 dark:text-blue-100">
-            {result.error ? (
-              // Display error message if the backend returns an error.
-              <div className="text-red-500 dark:text-red-400">{result.error}</div>
-            ) : (
-              <>
-                {/* Display Match Score */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-                  <div className="mb-2 md:mb-0">
-                    <span className="font-semibold text-lg">Match Score:</span>{" "}
-                    <span className="text-3xl font-extrabold text-green-700 dark:text-green-400">
-                      {requirementsMetScore}%
-                    </span>
-                    <span className="ml-2 text-base text-gray-500 dark:text-gray-400">
-                      ({requirementsMetCount} of {requirementsTotal})
-                    </span>
-                  </div>
-                  {/* Progress Bar */}
-                  <div className="w-full md:w-96 mt-2 md:mt-0">
-                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full">
-                      <div
-                        className="h-3 bg-blue-400 dark:bg-blue-500 rounded-full"
-                        style={{
-                          width: `${
-                            requirementsTotal > 0
-                              ? (requirementsMetCount / requirementsTotal) * 100
-                              : 0
-                          }%`
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Display Requirements */}
-                <div>
-                  <div className="font-semibold text-green-700 dark:text-green-400 mb-2 text-lg">
-                    You meet these:
-                  </div>
-                  {effectiveMet.length === 0 && (
-                    <div className="text-xs text-gray-400 dark:text-gray-500 mb-2">None yet</div>
-                  )}
-                  {effectiveMet.map((req) => renderRequirementBox(req, true))}
-                  <div className="font-semibold text-red-700 dark:text-red-400 mb-2 text-lg mt-6">
-                    Missing requirements:
-                  </div>
-                  {effectiveMissing.length === 0 && (
-                    <div className="text-xs text-gray-400 dark:text-gray-500 mb-2">None!</div>
-                  )}
-                  {effectiveMissing.map((req) => renderRequirementBox(req, false))}
-                </div>
-
-                {/* Display AI Suggestions */}
-                {Array.isArray(result.ai_suggestions) && result.ai_suggestions.length > 0 && (
-                  <>
-                    <div className="font-semibold text-blue-700 dark:text-blue-300 mt-8 mb-3 text-lg">
-                      Helpful Application Q&amp;A:
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {result.ai_suggestions.map((q, idx) => (
-                        <div
-                          key={idx}
-                          className="border border-blue-300 dark:border-blue-500 rounded-lg bg-white dark:bg-gray-900"
-                        >
-                          <button
-                            type="button"
-                            className="w-full text-left p-3 font-medium text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-500 rounded-t-lg transition"
-                            onClick={() =>
-                              setExpandedReq(expandedReq === "ai_" + idx ? null : "ai_" + idx)
-                            }
-                          >
-                            {q.question}
-                          </button>
-                          {expandedReq === "ai_" + idx && (
-                            <div className="px-4 pb-4 pt-1 text-gray-800 dark:text-gray-100 bg-blue-50 dark:bg-gray-900 rounded-b-lg border-t border-blue-200 dark:border-gray-700">
-                              {q.answer}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        )}
-        {/* Footer */}
-        <div className="mt-10 text-center text-gray-400 dark:text-gray-500 text-xs">
-          Resume Matcher © 2025
+  const requirement = (req, isMet, index) => {
+    const key = `${isMet ? "met" : "gap"}-${index}`;
+    const expanded = expandedReq === key;
+    return <li className={`tm-workspace-requirement ${isMet ? "is-met" : "is-gap"}`} key={req}>
+      <button type="button" className="tm-workspace-requirement-toggle" aria-expanded={expanded}
+        aria-controls={`requirement-${key}`} onClick={() => setExpandedReq(expanded ? null : key)}>
+        <span className="tm-workspace-requirement-status" aria-hidden="true">{isMet ? <FiCheck /> : <FiPlus />}</span>
+        <span>{req}</span><FiChevronDown className={expanded ? "is-expanded" : ""} aria-hidden="true" />
+      </button>
+      {expanded && <div className="tm-workspace-requirement-detail" id={`requirement-${key}`}>
+        <p>{result.requirement_explanations?.[req] || "No additional explanation was returned for this requirement."}</p>
+        <span className="tm-workspace-detail-label">Does this reflect your experience?</span>
+        <div className="tm-workspace-requirement-actions">
+          <button type="button" onClick={() => {
+            setUserMet(prev => [...new Set([...prev, req])]);
+            setUserMissing(prev => prev.filter(item => item !== req));
+            setExpandedReq(null);
+          }}><FiCheck aria-hidden="true" /> Yes, I meet this</button>
+          <button type="button" onClick={() => {
+            setUserMissing(prev => [...new Set([...prev, req])]);
+            setUserMet(prev => prev.filter(item => item !== req));
+            setExpandedReq(null);
+          }}>Not yet</button>
         </div>
-      </div>
-    </div>
-  );
-};
+      </div>}
+    </li>;
+  };
 
-export default ResumeMatcher;
+  return <main className="tm-workspace" id="main-content">
+    <div className="tm-workspace-container">
+      <header className="tm-workspace-heading">
+        <div>
+          <p className="tm-workspace-eyebrow"><span /> YOUR NEXT MOVE STARTS HERE</p>
+          <h1>Find where you <span>fit.</span></h1>
+          <p className="tm-workspace-description">Your experience. A new opportunity. Let’s see how they connect.</p>
+        </div>
+        <div className="tm-workspace-heading-note"><FiTarget aria-hidden="true" /><span>A little clarity.<br /><strong>A more confident next step.</strong></span></div>
+      </header>
+
+      <ol className="tm-workspace-steps" aria-label="Match progress">
+        <li className={resumeFile ? "is-complete" : "is-current"} aria-current={!resumeFile ? "step" : undefined}>
+          <span className="tm-workspace-step-number">{resumeFile ? <FiCheck aria-hidden="true" /> : "01"}</span>
+          <span>Your resume</span><span className="tm-workspace-step-line" />
+        </li>
+        <li className={jobDesc.trim() ? "is-complete" : resumeFile ? "is-current" : ""} aria-current={resumeFile && !jobDesc.trim() ? "step" : undefined}>
+          <span className="tm-workspace-step-number">{jobDesc.trim() ? <FiCheck aria-hidden="true" /> : "02"}</span>
+          <span>The opportunity</span><span className="tm-workspace-step-line" />
+        </li>
+        <li className={result ? "is-complete" : ready ? "is-current" : ""} aria-current={ready && !result ? "step" : undefined}>
+          <span className="tm-workspace-step-number">{result ? <FiCheck aria-hidden="true" /> : "03"}</span><span>Your match</span>
+        </li>
+      </ol>
+
+      <form onSubmit={submit} className="tm-workspace-form" aria-busy={loading}>
+        <div className="tm-workspace-inputs">
+          <section className="tm-workspace-card tm-workspace-resume" aria-labelledby="workspace-resume-title">
+            <div className="tm-workspace-card-heading">
+              <span className="tm-workspace-card-icon"><FiFileText aria-hidden="true" /></span>
+              <div><h2 id="workspace-resume-title">Bring your experience.</h2><p>Start with your latest resume.</p></div>
+              {resumeFile && <FiCheckCircle className="tm-workspace-ready-icon" aria-label="Resume selected" />}
+            </div>
+            <div className={`tm-workspace-dropzone${dragging ? " is-dragging" : ""}${resumeFile ? " has-file" : ""}`}
+              onDragOver={(event) => { event.preventDefault(); if (!loading) setDragging(true); }}
+              onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDragging(false); }}
+              onDrop={(event) => { event.preventDefault(); setDragging(false); chooseFile(event.dataTransfer.files); }}>
+              <input ref={fileInput} type="file" id="workspace-resume" accept=".pdf,.docx,.txt" disabled={loading}
+                aria-label={resumeFile ? "Replace resume" : "Upload your resume"}
+                aria-describedby={fileError ? "workspace-file-error" : resumeFile ? undefined : "workspace-file-types"}
+                aria-invalid={fileError ? true : undefined} onChange={(event) => chooseFile(event.target.files)} />
+              <span className="tm-workspace-upload-icon">{resumeFile ? <FiFileText aria-hidden="true" /> : <FiUploadCloud aria-hidden="true" />}</span>
+              {resumeFile ? <>
+                <strong className="tm-workspace-file-name">{resumeFile.name}</strong>
+                <span>{fileSize(resumeFile.size)} <span aria-hidden="true">·</span> Ready to match</span>
+                <span className="tm-workspace-upload-link">Choose a different file <FiArrowRight aria-hidden="true" /></span>
+              </> : <>
+                <strong>Drop your resume here</strong>
+                <span>or <span className="tm-workspace-upload-link">browse files <FiArrowUpRight aria-hidden="true" /></span></span>
+                <span id="workspace-file-types" className="tm-workspace-file-types">PDF, DOCX, or TXT</span>
+              </>}
+            </div>
+            {resumeFile && <button type="button" className="tm-workspace-remove" onClick={removeFile} disabled={loading}><FiX aria-hidden="true" /> Remove file</button>}
+            {fileError && <p id="workspace-file-error" role="alert" className="tm-workspace-field-error"><FiAlertCircle aria-hidden="true" /> {fileError}</p>}
+            <div className="tm-workspace-tip"><span className="tm-workspace-tip-spark" aria-hidden="true">✦</span><p><strong>Make your experience count.</strong> Include the skills, projects, and achievements you want to bring to your next role.</p></div>
+          </section>
+
+          <section className="tm-workspace-card tm-workspace-job" aria-labelledby="workspace-job-title">
+            <div className="tm-workspace-card-heading">
+              <span className="tm-workspace-card-icon"><FiBriefcase aria-hidden="true" /></span>
+              <div><h2 id="workspace-job-title">Meet the opportunity.</h2><p>Paste the role you have in mind.</p></div>
+            </div>
+            <label className="tm-workspace-field-label" htmlFor="workspace-job-description">Job description</label>
+            <textarea id="workspace-job-description" value={jobDesc} disabled={loading} required
+              onChange={(event) => { setJobDesc(event.target.value); clearResult(); }}
+              placeholder={"Paste the full job description here…\n\nInclude the responsibilities, required skills, and qualifications for a clearer match."} />
+            <div className="tm-workspace-job-meta"><span>The full posting gives you more context.</span><span>{wordCount} {wordCount === 1 ? "word" : "words"}</span></div>
+          </section>
+        </div>
+
+        <div className="tm-workspace-action-bar">
+          <p className={ready ? "is-ready" : ""} aria-live="polite">
+            {loading ? <><FiLoader className="tm-workspace-spin" aria-hidden="true" /><span>Reading your resume and comparing the role…</span></>
+              : ready ? <><FiCheckCircle aria-hidden="true" /><span>All set. Let’s connect the dots.</span></>
+              : <><FiFileText aria-hidden="true" /><span>{!resumeFile ? "Add your resume" : "Resume added"}<span className="tm-workspace-action-dot">·</span>{jobDesc.trim() ? "Job description added" : "Paste a job description"}</span></>}
+          </p>
+          <button type="submit" className="tm-workspace-submit" disabled={!ready || loading}>
+            {loading ? "Finding your match…" : result ? "Check match again" : "Find my match"}<FiArrowUpRight aria-hidden="true" />
+          </button>
+        </div>
+        {error && <p role="alert" className="tm-workspace-error"><FiAlertCircle aria-hidden="true" /> {error}</p>}
+      </form>
+
+      {!result && <section className="tm-workspace-outcomes" aria-label="What your match includes">
+        <p className="tm-workspace-outcome-intro">A clearer picture<br /><strong>of what comes next.</strong></p>
+        <div><FiTarget aria-hidden="true" /><span><strong>Understand your fit</strong><small>See how your experience aligns.</small></span></div>
+        <div><FiCheckCircle aria-hidden="true" /><span><strong>Find your strengths</strong><small>Spot the matches and the gaps.</small></span></div>
+        <div><FiMessageSquare aria-hidden="true" /><span><strong>Prepare with purpose</strong><small>Explore tailored application Q&amp;A.</small></span></div>
+      </section>}
+
+      {result && <section className="tm-workspace-results" aria-labelledby="workspace-results-title" aria-live="polite">
+        <div className="tm-workspace-results-heading"><div><p className="tm-workspace-eyebrow">YOUR MATCH OVERVIEW</p><h2 id="workspace-results-title">See the connection.</h2></div><span className="tm-workspace-results-file"><FiFileText aria-hidden="true" />{resumeFile?.name}</span></div>
+        <div className="tm-workspace-score-card">
+          <div className="tm-workspace-score-ring" style={{ "--match-progress": `${score}%` }} aria-label={requirementsTotal ? `${score}% match` : "No requirements identified"}>
+            <span><strong>{requirementsTotal ? score : "—"}{requirementsTotal > 0 && <small>%</small>}</strong><em>MATCH</em></span>
+          </div>
+          <div className="tm-workspace-score-copy"><h3>{requirementsTotal ? "Your experience, in perspective." : "There’s not enough detail for a score yet."}</h3><p>{requirementsTotal ? <><strong>{effectiveMet.length} of {requirementsTotal} requirements</strong> align with your experience. Explore each one below to see the reasoning and adjust anything that needs context.</> : "Try a job description with clear responsibilities and qualifications, then check your match again."}</p>{(userMet.length > 0 || userMissing.length > 0) && <span className="tm-workspace-adjusted">Includes your adjustments</span>}</div>
+          <div className="tm-workspace-score-stats"><span><strong>{effectiveMet.length}</strong> strengths</span><span><strong>{effectiveMissing.length}</strong> to explore</span></div>
+        </div>
+
+        <div className="tm-workspace-requirements-grid">
+          <section className="tm-workspace-card" aria-labelledby="workspace-strengths"><h3 className="tm-workspace-list-heading" id="workspace-strengths"><FiCheckCircle aria-hidden="true" /> Your strengths <span>{effectiveMet.length}</span></h3><p className="tm-workspace-list-note">Experience that connects with the role.</p><ul>{effectiveMet.map((req, index) => requirement(req, true, index))}</ul>{!effectiveMet.length && <p className="tm-workspace-empty">No matching requirements identified yet. Review the areas to explore for more context.</p>}</section>
+          <section className="tm-workspace-card" aria-labelledby="workspace-gaps"><h3 className="tm-workspace-list-heading" id="workspace-gaps"><FiTarget aria-hidden="true" /> Areas to explore <span>{effectiveMissing.length}</span></h3><p className="tm-workspace-list-note">Opportunities to add context or build experience.</p><ul>{effectiveMissing.map((req, index) => requirement(req, false, index))}</ul>{!effectiveMissing.length && <p className="tm-workspace-empty">No missing requirements identified in this match.</p>}</section>
+        </div>
+
+        {Array.isArray(result.ai_suggestions) && result.ai_suggestions.length > 0 && <section className="tm-workspace-card tm-workspace-questions" aria-labelledby="workspace-questions-title">
+          <div className="tm-workspace-card-heading"><span className="tm-workspace-card-icon"><FiMessageSquare aria-hidden="true" /></span><div><h2 id="workspace-questions-title">Turn insight into your next step.</h2><p>Application questions, with your experience in mind.</p></div></div>
+          {result.ai_suggestions.map((item, index) => <div className="tm-workspace-question" key={index}><button type="button" aria-expanded={expandedReq === `qa-${index}`} aria-controls={`workspace-answer-${index}`} onClick={() => setExpandedReq(expandedReq === `qa-${index}` ? null : `qa-${index}`)}><span>{item.question}</span><FiChevronDown className={expandedReq === `qa-${index}` ? "is-expanded" : ""} aria-hidden="true" /></button>{expandedReq === `qa-${index}` && <p id={`workspace-answer-${index}`}>{item.answer}</p>}</div>)}
+        </section>}
+        <p className="tm-workspace-results-note">A starting point for reflection. Your experience is more than a match score.</p>
+      </section>}
+    </div>
+  </main>;
+}

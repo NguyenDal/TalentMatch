@@ -17,9 +17,12 @@ import httpx
 # === Database & Auth Imports ===
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from app.auth import hash_password, verify_password
-from app.models import User, LoginEvent, UserSession
+from app.models import User, LoginEvent, UserSession, GoogleIdentity
+from app.auth_sessions import (get_current_user, get_current_user_locked, issue_session, normalized_email, require_username,
+    set_initial_password, signing_secret, user_by_email, validate_password, USERNAME_PATTERN)
+from app.google_auth import router as google_auth_router, frontend_origin
 from app.database import get_db
 
 # === JWT Handling ===
@@ -320,9 +323,10 @@ class LogoutSessionRequest(BaseModel):
 # === FASTAPI APPLICATION SETUP ===
 
 app = FastAPI()
+app.include_router(google_auth_router)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Change in prod!
+    allow_origins=[frontend_origin()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -414,48 +418,27 @@ async def upload_resume(
 @app.post("/register/")
 def register_user(
     username: str = Form(...),
-    first_name: str = Form(...),
-    last_name: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    """
-    Register a new user account (requires unique username and email).
-    """
-    # Uniqueness checks
-    if db.query(User).filter(User.username == username).first():
-        raise HTTPException(status_code=400, detail="Username already registered")
-    if db.query(User).filter(User.email == email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    # Hash password
-    hashed_pw = hash_password(password)
-
-    # Create user with first/last name populated
-    new_user = User(
-        username=username.strip(),
-        email=email.strip().lower(),
-        hashed_password=hashed_pw,
-        first_name=first_name.strip(),
-        last_name=last_name.strip(),
-    )
-
+    username = require_username(db, username)
+    try:
+        email = validate_email(email.strip(), check_deliverability=False).normalized.lower()
+    except EmailNotValidError:
+        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    if user_by_email(db, email):
+        raise HTTPException(status_code=409, detail="Email already registered. Please log in instead.")
+    validate_password(password)
+    new_user = User(username=username, email=email, hashed_password=hash_password(password))
     db.add(new_user)
     try:
         db.commit()
         db.refresh(new_user)
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Registration failed")
-
-    return {
-        "id": new_user.id,
-        "username": new_user.username,
-        "email": new_user.email,
-        "first_name": new_user.first_name,
-        "last_name": new_user.last_name,
-    }
+        raise HTTPException(status_code=409, detail="That username or email is already registered.")
+    return {"id": new_user.id, "username": new_user.username, "email": new_user.email}
 
 # === USER LOGIN ENDPOINT ===
 
@@ -466,132 +449,33 @@ async def login(
     remember: bool = Form(False),
     db: Session = Depends(get_db),
 ):
-    """
-    Login with either username or email.
-    Returns a JWT token and basic user info on success.
-    Also records a login event (active session with session_id).
-    """
-    user = db.query(User).filter(
-        or_(
-            User.email == form_data.username,
-            User.username == form_data.username,
-        )
-    ).first()
+    client_ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    if not client_ip:
+        client_ip = request.client.host if request.client else "Unknown"
+    # Finish network work before taking the account lock. Never await while
+    # holding it: another synchronous DB query could block this event loop.
+    location = await geo_lookup(client_ip)
+    identifier = form_data.username.strip().lower()
+    user = db.query(User).filter(or_(
+        func.lower(func.trim(User.email)) == identifier,
+        func.lower(func.trim(User.username)) == identifier,
+    )).with_for_update().populate_existing().first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect username/email or password")
+    return issue_session(user, request, db, remember, location=location)
 
-    SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret")
-    ALGORITHM = "HS256"
-
-    # --- create session id + token expiry ---
-    session_id = secrets.token_urlsafe(32)
-
-    # short vs long expiry (you can tweak durations)
-    if remember:
-        exp = datetime.utcnow() + timedelta(days=30)
-    else:
-        exp = datetime.utcnow() + timedelta(days=1)
-
-    payload = {
-        "sub": user.username,
-        "user_id": user.id,
-        "email": user.email,
-        "username": user.username,
-        "sid": session_id,  # <- important: link JWT to a login_events row
-        "exp": exp,
-    }
-
-    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-
-    # --- capture client info ---
-    x_forwarded_for = request.headers.get("x-forwarded-for")
-    if x_forwarded_for:
-        client_ip = x_forwarded_for.split(",")[0].strip()
-    else:
-        client_ip = request.client.host if request.client else "Unknown"
-
-    user_agent = request.headers.get("user-agent", "Unknown device")
-    location = await geo_lookup(client_ip)
-
-    # --- store as an ACTIVE session in login_events ---
-    login_event = LoginEvent(
-        user_id=user.id,
-        ip=client_ip,
-        user_agent=user_agent,
-        location=location,
-        session_id=session_id,
-        active=True,
-    )
-    db.add(login_event)
-    db.commit()
-
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user_id": user.id,
-        "username": user.username,
-        "email": user.email,
-    }
-
-# === JWT-Protected User Info Endpoint ===
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+# Require an explicit secret for every active authentication path.
 ALGORITHM = "HS256"
-SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret")
-
-
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-):
-    """
-    Decode JWT, find user, and ensure the associated login_events row is still active.
-    If the session is revoked or token is invalid/expired, raise 401.
-    """
-    credentials_exception = HTTPException(
-        status_code=401,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        sid: str | None = payload.get("sid")
-
-        if username is None:
-            raise credentials_exception
-
-        user = db.query(User).filter(User.username == username).first()
-        if user is None:
-            raise credentials_exception
-
-        # If we have a session id, make sure this session is still active
-        if sid:
-            session_row = (
-                db.query(LoginEvent)
-                .filter(
-                    LoginEvent.user_id == user.id,
-                    LoginEvent.session_id == sid,
-                )
-                .first()
-            )
-            if session_row is None or not session_row.active:
-                # session was revoked / deleted
-                raise credentials_exception
-
-        return user
-    except JWTError:
-        raise credentials_exception
+SECRET_KEY = signing_secret()
 
 @app.get("/me/")
-def read_users_me(current_user: User = Depends(get_current_user)):
+def read_users_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get details about the currently logged-in user (JWT required)."""
     return {
         "id": current_user.id,
         "username": current_user.username,
-        "full_name": current_user.full_name,
-        "first_name": current_user.first_name,
-        "last_name": current_user.last_name,
+        "has_password": bool(current_user.hashed_password),
+        "google_linked": db.query(GoogleIdentity.id).filter(GoogleIdentity.user_id == current_user.id).first() is not None,
         "email": current_user.email,
         "email_verified": bool(getattr(current_user, "email_verified", False)),
         "profile_image_url": current_user.profile_image_url,
@@ -676,7 +560,7 @@ def verify_password_reset(token: str = Form(...), db: Session = Depends(get_db))
     """
     Verifies the given reset token. If valid and not expired, returns OK.
     """
-    user = db.query(User).filter(User.reset_token == token).first()
+    user = db.query(User).filter(User.reset_token == token).with_for_update().first()
     if not user or not user.verify_reset_token(token):
         raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
     return {"ok": True, "user_id": user.id, "username": user.username, "email": user.email}
@@ -692,10 +576,11 @@ def reset_password(
     """
     Reset the user's password using a valid reset token.
     """
-    user = db.query(User).filter(User.reset_token == token).first()
+    user = db.query(User).filter(User.reset_token == token).with_for_update().first()
     if not user or not user.verify_reset_token(token):
         raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
 
+    validate_password(new_password)
     # Hash and set the new password
     user.hashed_password = hash_password(new_password)
     user.clear_reset_token()
@@ -706,25 +591,35 @@ def reset_password(
 # --- PROFILE UPDATE ENDPOINT ---
 @app.patch("/profile/update/")
 def update_profile(
-    first_name: str = Form(None),
-    last_name: str = Form(None),
     email: str = Form(None),
     profession: str = Form(None),
     bio: str = Form(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_locked),
     db: Session = Depends(get_db),
 ):
-    if first_name is not None:
-        current_user.first_name = first_name.strip()
-    if last_name is not None:
-        current_user.last_name = last_name.strip()
     if email is not None:
-        current_user.email = email.strip().lower()
+        try:
+            new_email = validate_email(email.strip(), check_deliverability=False).normalized.lower()
+        except EmailNotValidError:
+            raise HTTPException(status_code=400, detail="Enter a valid email address.")
+        existing = user_by_email(db, new_email)
+        if existing and existing.id != current_user.id:
+            raise HTTPException(status_code=409, detail="This email is already registered.")
+        if normalized_email(current_user.email) != new_email:
+            current_user.email = new_email
+            current_user.email_verified = False
+            current_user.email_verification_code = None
+            current_user.email_verification_expires_at = None
+            current_user.clear_reset_token()
     if profession is not None:
         current_user.profession = profession.strip()
     if bio is not None:
         current_user.bio = bio.strip()
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="That username or email is already registered.")
     db.refresh(current_user)
     return {"ok": True}
 
@@ -774,7 +669,7 @@ async def update_account(
     background_tasks: BackgroundTasks,
     username: str = Form(None),
     email: str = Form(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_locked),
     db: Session = Depends(get_db),
 ):
     """
@@ -788,10 +683,12 @@ async def update_account(
     # --- Username update ---
     if username is not None:
         new_username = username.strip()
-        if new_username and new_username != current_user.username:
+        if not USERNAME_PATTERN.fullmatch(new_username):
+            raise HTTPException(status_code=400, detail="Use 3–30 letters, numbers, or underscores.")
+        if new_username != current_user.username:
             existing_user = (
                 db.query(User)
-                .filter(User.username == new_username, User.id != current_user.id)
+                .filter(func.lower(func.trim(User.username)) == new_username.lower(), User.id != current_user.id)
                 .first()
             )
             if existing_user:
@@ -807,7 +704,7 @@ async def update_account(
         if new_email and new_email != current_user.email:
             existing_email = (
                 db.query(User)
-                .filter(User.email == new_email, User.id != current_user.id)
+                .filter(func.lower(func.trim(User.email)) == new_email, User.id != current_user.id)
                 .first()
             )
             if existing_email:
@@ -818,12 +715,13 @@ async def update_account(
 
             # validate format
             try:
-                validate_email(new_email)
+                validate_email(new_email, check_deliverability=False)
             except EmailNotValidError as e:
                 raise HTTPException(status_code=400, detail=str(e))
 
             # apply new email + mark as unverified, clear any previous code
             current_user.email = new_email
+            current_user.clear_reset_token()
             email_changed = True
 
             # these attrs need to exist on your User model
@@ -831,7 +729,11 @@ async def update_account(
             current_user.email_verification_code = None
             current_user.email_verification_expires_at = None
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="That username or email is already registered.")
     db.refresh(current_user)
 
     return {
@@ -843,7 +745,7 @@ async def update_account(
 @app.post("/account/send-verification/")
 async def send_verification_email(
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_locked),
     db: Session = Depends(get_db),
 ):
     """
@@ -900,7 +802,7 @@ TalentMatch Team
 @app.post("/account/verify-email/")
 def verify_email_code(
     code: str = Form(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_locked),
     db: Session = Depends(get_db),
 ):
     """
@@ -930,29 +832,33 @@ def verify_email_code(
 
     return {"ok": True, "email_verified": True}
 
+@app.post("/account/set-password/")
+def set_password(
+    new_password: str = Form(...),
+    current_user: User = Depends(get_current_user_locked),
+    db: Session = Depends(get_db),
+):
+    return set_initial_password(db, current_user.id, new_password)
+
 # --- SECURITY: Change password while logged in ---
 
 @app.post("/account/change-password/")
 def change_password(
     current_password: str = Form(...),
     new_password: str = Form(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_locked),
     db: Session = Depends(get_db),
 ):
     """
     Change the user's password while logged in.
     Requires the current password and a new password.
     """
+    current_user = db.query(User).filter(User.id == current_user.id).with_for_update().populate_existing().one()
     # Verify current password
     if not verify_password(current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect.")
 
-    # Basic new password checks
-    if len(new_password) < 8:
-        raise HTTPException(
-            status_code=400,
-            detail="New password must be at least 8 characters long.",
-        )
+    validate_password(new_password)
 
     if verify_password(new_password, current_user.hashed_password):
         raise HTTPException(

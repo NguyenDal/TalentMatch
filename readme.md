@@ -227,7 +227,8 @@ these values in Render's backend environment, never in React or committed files:
 | `FRONTEND_URL` | Optional override; defaults to Render's `RENDER_EXTERNAL_URL`. Use an exact HTTPS origin without a path. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | TalentMatch's Google OAuth client credentials. |
 | `GOOGLE_REDIRECT_URI`, `GOOGLE_COOKIE_SAMESITE` | Callback defaults to `${RENDER_EXTERNAL_URL}/auth/google/callback/`; override only if needed. Keep the cookie setting `lax`. |
-| `MAIL_PROVIDER`, `SMTP2GO_API_KEY`, `MAIL_FROM` | `smtp2go`, an SMTP2GO API key, and a sender address verified with SMTP2GO. Optional `MAIL_FROM_NAME` defaults to `TalentMatch`. |
+| `MAIL_PROVIDER`, `MAIL_FROM`, `MAIL_FROM_NAME` | Use `gmail_api` and the mailbox that authorized sending. The optional display name defaults to `TalentMatch`. |
+| `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` | Private credentials for the owner's mail client. Public Google sign-in uses the separate `GOOGLE_CLIENT_*` variables. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_STORAGE_BUCKET_NAME`, `AWS_REGION` | Existing S3 configuration for avatar uploads; the current region is `ca-central-1`. |
 
 Add the exact deployed callback, including its trailing slash, to the Google
@@ -270,8 +271,23 @@ scaling to multiple workers or instances.
 Render Free sleeps after 15 idle minutes, and a later request can take about a
 minute to wake it. Its filesystem is ephemeral; persistent application data stays
 in Neon and uploaded avatars stay in S3. Render Free blocks common SMTP ports,
-so production password-reset and verification emails use SMTP2GO's HTTPS API.
-Delivery needs the verified sender and working API credentials. Free hosting is
+so password-reset and verification emails use HTTPS. Enable the Gmail API in a
+dedicated Google Cloud project and authorize the owner's mailbox with the
+`gmail.send` scope. For a dedicated personal mailbox, Google's Personal OAuth
+mode restricts consent to its owner. Users signing into TalentMatch are only
+asked for identity and email. [Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes) · [Google OAuth audiences](https://support.google.com/cloud/answer/15549945)
+
+From `backend/`, use the desktop client JSON from that project to connect
+the sender once. The helper opens a local callback and writes a new ignored
+file after consent. Import its values into the Render service's private
+environment.
+
+```powershell
+python -m app.commands.authorize_gmail_sender --client-json "PATH_TO_DESKTOP_CLIENT.json" --sender-email "YOUR_SENDER@gmail.com" --output ".env.gmail-sender" --manual-browser
+```
+
+The optional SMTP2GO adapter accepts `MAIL_PROVIDER=smtp2go`, a verified
+`MAIL_FROM` and a private `SMTP2GO_API_KEY`. Free hosting is
 subject to plan limits; OpenAI and S3 remain separately metered, and email has its
 own allowance. This deployment path does not restart, modify, or delete Railway
 services. See [Render Free limits](https://render.com/docs/free),

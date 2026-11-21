@@ -10,7 +10,8 @@ A web app to check how well your resume matches a job description, see detailed 
 
 - Upload a resume (PDF, DOCX, or TXT)
 - Paste a job description
-- Instantly see a match score and which requirements are met/missing
+- See which role-specific skills your resume demonstrates and which need more evidence
+- Review location, work arrangements, and eligibility in separate job notes
 - Get smart, tailored Q&A for your application
 - User-friendly, modern interface with profile + trends
 
@@ -88,8 +89,12 @@ resume comparison, and application Q&A. Set `OPENAI_MODEL` in the backend
 environment to override it; restart the backend after changing this value.
 Do not use the retired `gpt-4.1-nano` model.
 
-Each match uses three text requests: extract the posting's requirements, compare
-them with the resume, and generate up to three short application Q&A items.
+The first request extracts role-specific skills and any job notes from the posting.
+When the posting names skills, two further requests compare them with the resume
+and generate up to three short application Q&A items. The score is the share of
+those skills supported by resume evidence. Explicit conditions such as onsite
+days, work authorization, or a degree belong in the notes. A posting with only
+such conditions can return notes without a percentage.
 GPT-6 Luna runs with `reasoning_effort=none`; output is capped at 4,096, 4,096,
 and 2,048 tokens respectively. These are ceilings, not fixed token charges.
 Prompts request concise explanations and avoid duplicate requirements. Profile

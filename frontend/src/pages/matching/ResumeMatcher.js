@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import axios from "axios";
-import { FiAlertCircle, FiArrowRight, FiArrowUpRight, FiBriefcase, FiCheck, FiCheckCircle, FiChevronDown, FiFileText, FiLoader, FiMessageSquare, FiPlus, FiTarget, FiUploadCloud, FiX } from "react-icons/fi";
+import { FiAlertCircle, FiArrowRight, FiArrowUpRight, FiBriefcase, FiCheck, FiCheckCircle, FiChevronDown, FiClipboard, FiFileText, FiLoader, FiMessageSquare, FiPlus, FiTarget, FiUploadCloud, FiX } from "react-icons/fi";
 import { BASE_URL, getAuthHeaders } from "../../services/api";
 import "./ResumeMatcher.css";
 
@@ -26,7 +26,9 @@ function matchResultError(data) {
       !isNonemptyString(item.answer) || isErrorLabel(item.question)))) return failedAnalysisMessage;
   if (data.requirement_explanations != null && (!isRecord(data.requirement_explanations) ||
     Object.values(data.requirement_explanations).some((item) => typeof item !== "string"))) return failedAnalysisMessage;
-  return requirements.length ? "" : emptyAnalysisMessage;
+  if (data.job_notes !== undefined && (!Array.isArray(data.job_notes) ||
+    data.job_notes.some((note) => !isNonemptyString(note)))) return failedAnalysisMessage;
+  return requirements.length || data.job_notes?.length ? "" : emptyAnalysisMessage;
 }
 
 export default function ResumeMatcher() {
@@ -48,6 +50,7 @@ export default function ResumeMatcher() {
 
   const originalMet = [...new Set(result?.met_requirements || [])];
   const originalMissing = [...new Set(result?.missing_requirements || [])];
+  const jobNotes = result?.job_notes || [];
   const effectiveMet = [...new Set([...originalMet, ...userMet])].filter(req => !userMissing.includes(req));
   const effectiveMissing = [...new Set([...originalMissing, ...userMissing])].filter(req => !userMet.includes(req));
   const requirementsTotal = new Set([...originalMet, ...originalMissing]).size;
@@ -240,17 +243,34 @@ export default function ResumeMatcher() {
       {result && <section className="tm-workspace-results" aria-labelledby="workspace-results-title" aria-live="polite">
         <div className="tm-workspace-results-heading"><div><p className="tm-workspace-eyebrow">YOUR MATCH OVERVIEW</p><h2 id="workspace-results-title">See the connection.</h2></div><span className="tm-workspace-results-file"><FiFileText aria-hidden="true" />{resumeFile?.name}</span></div>
         <div className="tm-workspace-score-card">
-          <div className="tm-workspace-score-ring" style={{ "--match-progress": `${score}%` }} aria-label={requirementsTotal ? `${score}% match` : "No requirements identified"}>
-            <span><strong>{requirementsTotal ? score : "—"}{requirementsTotal > 0 && <small>%</small>}</strong><em>MATCH</em></span>
+          <div className="tm-workspace-score-ring" style={{ "--match-progress": `${score}%` }} aria-label={requirementsTotal ? `${score}% skills match` : "No skills score"}>
+            <span><strong>{requirementsTotal ? score : "—"}{requirementsTotal > 0 && <small>%</small>}</strong><em>SKILLS MATCH</em></span>
           </div>
-          <div className="tm-workspace-score-copy"><h3>Your experience, in perspective.</h3><p><strong>{effectiveMet.length} of {requirementsTotal} requirements</strong> align with your experience. Explore each one below to see the reasoning and adjust anything that needs context.</p>{(userMet.length > 0 || userMissing.length > 0) && <span className="tm-workspace-adjusted">Includes your adjustments</span>}</div>
-          <div className="tm-workspace-score-stats"><span><strong>{effectiveMet.length}</strong> strengths</span><span><strong>{effectiveMissing.length}</strong> to explore</span></div>
+          <div className="tm-workspace-score-copy">
+            {requirementsTotal > 0 ? <>
+              <h3>How your skills match the role</h3>
+              <p>Your resume matches <strong>{effectiveMet.length} of {requirementsTotal} listed {requirementsTotal === 1 ? "skill" : "skills"}</strong>. Select a skill below to review the evidence or adjust your match.</p>
+            </> : <>
+              <h3>No role-specific skills to score</h3>
+              <p>We found posting details to review below. Add the role’s skills or responsibilities to get a skills match.</p>
+            </>}
+            {(userMet.length > 0 || userMissing.length > 0) && <span className="tm-workspace-adjusted">Includes your adjustments</span>}
+          </div>
+          {requirementsTotal > 0 && <div className="tm-workspace-score-stats"><span><strong>{effectiveMet.length}</strong> strengths</span><span><strong>{effectiveMissing.length}</strong> to explore</span></div>}
         </div>
 
-        <div className="tm-workspace-requirements-grid">
-          <section className="tm-workspace-card" aria-labelledby="workspace-strengths"><h3 className="tm-workspace-list-heading" id="workspace-strengths"><FiCheckCircle aria-hidden="true" /> Your strengths <span>{effectiveMet.length}</span></h3><p className="tm-workspace-list-note">Experience that connects with the role.</p><ul>{effectiveMet.map((req, index) => requirement(req, true, index))}</ul>{!effectiveMet.length && <p className="tm-workspace-empty">No matching requirements identified yet. Review the areas to explore for more context.</p>}</section>
-          <section className="tm-workspace-card" aria-labelledby="workspace-gaps"><h3 className="tm-workspace-list-heading" id="workspace-gaps"><FiTarget aria-hidden="true" /> Areas to explore <span>{effectiveMissing.length}</span></h3><p className="tm-workspace-list-note">Opportunities to add context or build experience.</p><ul>{effectiveMissing.map((req, index) => requirement(req, false, index))}</ul>{!effectiveMissing.length && <p className="tm-workspace-empty">No missing requirements identified in this match.</p>}</section>
-        </div>
+        {requirementsTotal > 0 && <div className="tm-workspace-requirements-grid">
+          <section className="tm-workspace-card" aria-labelledby="workspace-strengths"><h3 className="tm-workspace-list-heading" id="workspace-strengths"><FiCheckCircle aria-hidden="true" /> Your strengths <span>{effectiveMet.length}</span></h3><p className="tm-workspace-list-note">Skills your resume demonstrates.</p><ul>{effectiveMet.map((req, index) => requirement(req, true, index))}</ul>{!effectiveMet.length && <p className="tm-workspace-empty">We couldn’t identify evidence of the listed skills in your resume.</p>}</section>
+          <section className="tm-workspace-card" aria-labelledby="workspace-gaps"><h3 className="tm-workspace-list-heading" id="workspace-gaps"><FiTarget aria-hidden="true" /> Areas to explore <span>{effectiveMissing.length}</span></h3><p className="tm-workspace-list-note">Skills to build or show more clearly in your resume.</p><ul>{effectiveMissing.map((req, index) => requirement(req, false, index))}</ul>{!effectiveMissing.length && <p className="tm-workspace-empty">Your resume covers every skill identified in this posting.</p>}</section>
+        </div>}
+
+        {jobNotes.length > 0 && <section className="tm-workspace-card tm-workspace-notes" aria-labelledby="workspace-notes-title">
+          <div className="tm-workspace-card-heading">
+            <span className="tm-workspace-card-icon"><FiClipboard aria-hidden="true" /></span>
+            <div><h3 id="workspace-notes-title">Job posting notes</h3><p>Details to check before applying. These are excluded from your skills score.</p></div>
+          </div>
+          <ul>{jobNotes.map((note, index) => <li key={index}>{note}</li>)}</ul>
+        </section>}
 
         {Array.isArray(result.ai_suggestions) && result.ai_suggestions.length > 0 && <section className="tm-workspace-card tm-workspace-questions" aria-labelledby="workspace-questions-title">
           <div className="tm-workspace-card-heading"><span className="tm-workspace-card-icon"><FiMessageSquare aria-hidden="true" /></span><div><h2 id="workspace-questions-title">Turn insight into your next step.</h2><p>Application questions, with your experience in mind.</p></div></div>

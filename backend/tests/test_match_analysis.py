@@ -37,6 +37,7 @@ REQUIREMENTS = [
     {"requirement": "React", "explanation": "Build interfaces"},
     {"requirement": "TypeScript", "explanation": "Maintain typed code"},
 ]
+POSTING = {"skills": REQUIREMENTS, "job_notes": []}
 MATCHES = [
     {"requirement": "React", "met": True, "explanation": "React project listed"},
     {"requirement": "TypeScript", "met": False, "explanation": "No TypeScript example"},
@@ -67,13 +68,15 @@ class MatchAnalysisTests(unittest.TestCase):
                                 files={"resume": (filename, content, "application/octet-stream")})
 
     def test_successful_match_and_qa_preserve_contract(self):
-        self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)]
+        self.create.side_effect = [response(POSTING), response(MATCHES), response(SUGGESTIONS)]
         with patch.object(main, "MODEL", "gpt-6-luna"):
             result = self.submit()
         self.assertEqual(result.status_code, 200, result.text)
         data = result.json()
         self.assertEqual(data["met_requirements"], ["React"])
         self.assertEqual(data["missing_requirements"], ["TypeScript"])
+        self.assertEqual(data["job_notes"], [])
+        self.assertEqual(data["scores"], [0.5])
         self.assertEqual(data["ai_suggestions"], SUGGESTIONS)
         self.assertIn("React project listed", data["requirement_explanations"]["React"])
         self.assertEqual(self.create.call_count, 3)
@@ -83,6 +86,71 @@ class MatchAnalysisTests(unittest.TestCase):
             self.assertEqual(call.kwargs["reasoning_effort"], "none")
             self.assertNotIn("temperature", call.kwargs)
             self.assertNotIn("max_tokens", call.kwargs)
+
+    def test_score_and_prep_only_use_skills_and_keep_notes_grounded_in_posting(self):
+        notes = [
+            "Hybrid in Toronto, with two office days per week.",
+            "Canadian citizens or permanent residents may apply.",
+            "A degree or equivalent experience is preferred.",
+            "Three years of Python experience is required.",
+        ]
+        description = "Build Python tools and write API guides.\n" + "\n".join(notes)
+        skill_names = ["Python", "Writing API guides"]
+        baseline = ["Written communication", "Codebase navigation", "Ability to learn unfamiliar systems"]
+        skills = [{"requirement": title, "explanation": ""} for title in skill_names + baseline]
+        self.create.side_effect = [
+            response({"skills": skills, "job_notes": [*notes, notes[0], "Sponsorship is available."]}),
+            response([{"requirement": name, "met": i == 0} for i, name in enumerate(skill_names)]),
+            response([]),
+        ]
+        result = self.submit(description=description)
+        self.assertEqual(result.status_code, 200, result.text)
+        data = result.json()
+        self.assertEqual(data["scores"], [0.5])
+        self.assertEqual(data["met_requirements"], ["Python"])
+        self.assertEqual(data["missing_requirements"], ["Writing API guides"])
+        self.assertEqual(list(data["requirement_explanations"]), skill_names)
+        self.assertEqual(data["job_notes"], notes)
+        for call in self.create.call_args_list[1:]:
+            prompt = call.kwargs["messages"][1]["content"]
+            for item in [*notes, *baseline]:
+                self.assertNotIn(item, prompt)
+            self.assertIn("Writing API guides", prompt)
+
+    def test_notes_only_posting_preserves_eligibility_wording_without_scoring_the_person(self):
+        notes = ["Remote within Canada only.", "Visa sponsorship is not available."]
+        self.create.return_value = response({"skills": [], "job_notes": notes})
+        result = self.submit(description="\n".join(notes))
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json(), {
+            "job_notes": notes, "scores": [], "met_requirements": [], "missing_requirements": [],
+            "requirement_explanations": {}, "ai_suggestions": [],
+        })
+        self.create.assert_called_once()
+
+    def test_misclassified_qualifications_move_to_grounded_notes_and_specialized_skills_stay(self):
+        academics = "Pursuing a bachelor's or master's degree, or equivalent experience, is preferred."
+        location = "The work arrangement is hybrid in Winnipeg."
+        eligibility = "No visa sponsorship is available for this post."
+        description = "\n".join([academics, location + " " + eligibility, "Develop hybrid networks for remote sensing."])
+        conditions = [
+            ("Bachelor’s or master’s degree pursuit", "or equivalent experience"),
+            ("University education or equivalent experience", "or equivalent experience"),
+            ("Hybrid work", "hybrid in Winnipeg"),
+        ]
+        titles = ["Hybrid networking", "Remote sensing"]
+        skills = [{"requirement": title, "explanation": excerpt} for title, excerpt in conditions]
+        skills.extend({"requirement": title} for title in titles)
+        self.create.side_effect = [
+            response({"skills": skills, "job_notes": ["sponsorship is available", "Canadian PR required"]}),
+            response([{"requirement": title, "met": True} for title in titles]),
+            response([]),
+        ]
+        result = self.submit(description=description)
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()["scores"], [1.0])
+        self.assertEqual(result.json()["met_requirements"], titles)
+        self.assertEqual(result.json()["job_notes"], [eligibility, academics, location])
 
     def test_unauthenticated_upload_never_calls_provider(self):
         main.app.dependency_overrides.clear()
@@ -109,14 +177,14 @@ class MatchAnalysisTests(unittest.TestCase):
         self.assertEqual(main.match_limiter.active, set())
 
     def test_exact_resume_and_job_text_limits_are_accepted(self):
-        self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)]
+        self.create.side_effect = [response(POSTING), response(MATCHES), response(SUGGESTIONS)]
         result = self.submit(description="j" * 30_000, content=b"r" * 40_000)
         self.assertEqual(result.status_code, 200, result.text)
         self.assertEqual(self.create.call_count, 3)
 
     def test_hourly_user_and_global_limits_stop_before_provider(self):
         limiter = MatchLimiter(per_user=1, total=2)
-        self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)] * 2
+        self.create.side_effect = [response(POSTING), response(MATCHES), response(SUGGESTIONS)] * 2
         with patch.object(main, "match_limiter", limiter):
             self.assertEqual(self.submit().status_code, 200)
             blocked = self.submit()
@@ -177,7 +245,7 @@ class MatchAnalysisTests(unittest.TestCase):
         document.add_paragraph("Built a React project with tests.")
         content = io.BytesIO()
         document.save(content)
-        self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)]
+        self.create.side_effect = [response(POSTING), response(MATCHES), response(SUGGESTIONS)]
         result = self.submit(filename="resume.docx", content=content.getvalue())
         self.assertEqual(result.status_code, 200, result.text)
         self.assertEqual(self.create.call_count, 3)
@@ -192,7 +260,7 @@ class MatchAnalysisTests(unittest.TestCase):
                 content = io.BytesIO()
                 document.save(content)
                 self.create.reset_mock()
-                self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)]
+                self.create.side_effect = [response(POSTING), response(MATCHES), response(SUGGESTIONS)]
                 result = self.submit(filename="resume.docx", content=content.getvalue())
                 self.assertEqual(result.status_code, status, result.text)
                 self.assertEqual(self.create.call_count, 3 if status == 200 else 0)
@@ -203,7 +271,7 @@ class MatchAnalysisTests(unittest.TestCase):
             pages = [SimpleNamespace(extract_text=Mock(return_value=text)) for text in texts]
             with self.subTest(pages=len(pages), status=status), patch.object(main.PyPDF2, "PdfReader", return_value=SimpleNamespace(pages=pages)):
                 self.create.reset_mock()
-                self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)]
+                self.create.side_effect = [response(POSTING), response(MATCHES), response(SUGGESTIONS)]
                 result = self.submit(filename="resume.pdf", content=b"ordinary mocked PDF")
                 self.assertEqual(result.status_code, status, result.text)
                 self.assertEqual(self.create.call_count, 3 if status == 200 else 0)
@@ -211,9 +279,9 @@ class MatchAnalysisTests(unittest.TestCase):
                     pages[2].extract_text.assert_not_called()
 
     def test_legacy_model_configuration_keeps_compatible_parameters(self):
-        self.create.return_value = response(REQUIREMENTS)
+        self.create.return_value = response(POSTING)
         with patch.object(main, "MODEL", "gpt-4.1-mini"):
-            self.assertEqual(main.extract_requirements_gpt("Role"), REQUIREMENTS)
+            self.assertEqual(main.extract_job_posting("Role"), (REQUIREMENTS, []))
         self.assertEqual(self.create.call_args.kwargs["temperature"], 0.2)
         self.assertEqual(self.create.call_args.kwargs["max_tokens"], 4096)
         self.assertNotIn("reasoning_effort", self.create.call_args.kwargs)
@@ -278,18 +346,21 @@ class MatchAnalysisTests(unittest.TestCase):
         self.create.assert_not_called()
 
     def test_valid_empty_extraction_has_specific_input_error_and_stops_pipeline(self):
-        self.create.return_value = response([])
+        self.create.return_value = response({"skills": [], "job_notes": []})
         result = self.submit()
         self.assertEqual(result.status_code, 422)
-        self.assertIn("No resume-checkable requirements", result.json()["detail"])
+        self.assertIn("No specific skills", result.json()["detail"])
         self.assertEqual(self.create.call_count, 1)
 
     def test_malformed_or_truncated_extraction_never_becomes_a_requirement(self):
         cases = [
             response("not json"), response({"error": "provider error"}),
-            response(["React"]), response([{"requirement": ""}]),
-            response([{"requirement": "React", "explanation": {"bad": "shape"}}]),
-            response(REQUIREMENTS, finish="length"), response(None),
+            response(REQUIREMENTS), response({"skills": ["React"], "job_notes": []}),
+            response({"skills": [{"requirement": ""}], "job_notes": []}),
+            response({"skills": [{"requirement": "React", "explanation": {"bad": "shape"}}], "job_notes": []}),
+            response({"skills": REQUIREMENTS}), response({"skills": REQUIREMENTS, "job_notes": "Remote"}),
+            response({"skills": REQUIREMENTS, "job_notes": [None]}),
+            response(POSTING, finish="length"), response(None),
         ]
         for payload in cases:
             with self.subTest(payload=payload):
@@ -302,7 +373,7 @@ class MatchAnalysisTests(unittest.TestCase):
 
     def test_fenced_json_and_duplicate_requirements_are_handled(self):
         duplicate = REQUIREMENTS + [{"requirement": "react", "explanation": "Duplicate"}]
-        self.create.side_effect = [response("```json\n" + json.dumps(duplicate) + "\n```"), response(MATCHES), response([])]
+        self.create.side_effect = [response("```json\n" + json.dumps({**POSTING, "skills": duplicate}) + "\n```"), response(MATCHES), response([])]
         result = self.submit()
         self.assertEqual(result.status_code, 200, result.text)
         self.assertEqual(result.json()["met_requirements"], ["React"])
@@ -315,13 +386,13 @@ class MatchAnalysisTests(unittest.TestCase):
         for matches in cases:
             with self.subTest(matches=matches):
                 self.create.reset_mock()
-                self.create.side_effect = [response(REQUIREMENTS), response(matches)]
+                self.create.side_effect = [response(POSTING), response(matches)]
                 result = self.submit()
                 self.assertEqual(result.status_code, 502, result.text)
                 self.assertEqual(self.create.call_count, 2)
 
     def test_invalid_qa_is_not_displayed_as_successful_analysis(self):
-        self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response({"error": "private-provider-detail"})]
+        self.create.side_effect = [response(POSTING), response(MATCHES), response({"error": "private-provider-detail"})]
         result = self.submit()
         self.assertEqual(result.status_code, 502)
         self.assertNotIn("private-provider-detail", result.text)
@@ -329,7 +400,7 @@ class MatchAnalysisTests(unittest.TestCase):
 
     def test_no_matched_requirements_is_a_real_success_when_missing_requirements_exist(self):
         missing = [{**match, "met": False} for match in MATCHES]
-        self.create.side_effect = [response(REQUIREMENTS), response(missing), response([])]
+        self.create.side_effect = [response(POSTING), response(missing), response([])]
         result = self.submit()
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json()["met_requirements"], [])

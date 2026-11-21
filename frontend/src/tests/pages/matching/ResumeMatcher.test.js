@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import axios from "axios";
 import ResumeMatcher from "../../../pages/matching/ResumeMatcher";
 import { BASE_URL } from "../../../services/api";
@@ -70,22 +70,33 @@ test("submits the selected file and role, displays results, supports adjustments
   await act(async () => resolve({ data: {
     met_requirements: ["React"], missing_requirements: ["TypeScript"],
     requirement_explanations: { React: "Found React projects.", TypeScript: "Add a TypeScript example." },
+    job_notes: ["Hybrid in Ottawa, two office days per week.", "Permanent residents are eligible."],
     ai_suggestions: [{ question: "What should I highlight?", answer: "Discuss the interface you built." }],
   } }));
-  expect(screen.getByLabelText("50% match")).toBeInTheDocument();
+  const notes = screen.getByRole("region", { name: "Job posting notes" });
+  const gaps = screen.getByRole("region", { name: /Areas to explore/ });
+  const questions = screen.getByRole("region", { name: /Turn insight/ });
+  expect(gaps.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(notes.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(notes).getAllByRole("listitem").map(item => item.textContent)).toEqual([
+    "Hybrid in Ottawa, two office days per week.", "Permanent residents are eligible.",
+  ]);
+  expect(within(notes).queryByRole("button")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("50% skills match")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "TypeScript" }));
   expect(screen.getByText("Add a TypeScript example.")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Yes, I meet this" }));
-  expect(screen.getByLabelText("100% match")).toBeInTheDocument();
+  expect(screen.getByLabelText("100% skills match")).toBeInTheDocument();
   expect(screen.getByText("Includes your adjustments")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "TypeScript" }));
   fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
-  expect(screen.getByLabelText("50% match")).toBeInTheDocument();
+  expect(screen.getByLabelText("50% skills match")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "What should I highlight?" }));
   expect(screen.getByText("Discuss the interface you built.")).toBeInTheDocument();
   expect(axios.post).toHaveBeenCalledTimes(1);
   fireEvent.change(screen.getByRole("textbox", { name: "Job description" }), { target: { value: "A different role" } });
   expect(screen.queryByRole("heading", { name: "See the connection." })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Job posting notes" })).not.toBeInTheDocument();
 });
 
 test("shows request errors inline and retains inputs for a retry", async () => {
@@ -162,6 +173,7 @@ test.each([
   ["overlapping classification", { met_requirements: ["React"], missing_requirements: ["React"] }],
   ["malformed explanation", { met_requirements: ["React"], missing_requirements: [], requirement_explanations: { React: {} } }],
   ["malformed Q&A", { met_requirements: ["React"], missing_requirements: [], ai_suggestions: [{ question: "How?", answer: {} }] }],
+  ["malformed notes", { met_requirements: ["React"], missing_requirements: [], job_notes: [{}] }],
 ])("rejects malformed response: %s", async (_name, data) => {
   axios.post.mockResolvedValueOnce({ data });
   render(<ResumeMatcher />);
@@ -180,7 +192,24 @@ test("zero matched requirements is a valid zero score when requirements were ide
   render(<ResumeMatcher />);
   fillInputs();
   fireEvent.click(screen.getByRole("button", { name: "Find my match" }));
-  expect(await screen.findByLabelText("0% match")).toHaveTextContent("0%");
+  expect(await screen.findByLabelText("0% skills match")).toHaveTextContent("0%");
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  expect(screen.getByText("0 of 1 requirements")).toBeInTheDocument();
+  expect(screen.getByText("0 of 1 listed skill")).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Job posting notes" })).not.toBeInTheDocument();
+});
+
+test("shows posting notes without assigning a percentage when there are no skills to score", async () => {
+  axios.post.mockResolvedValueOnce({ data: {
+    met_requirements: [], missing_requirements: [], ai_suggestions: [],
+    job_notes: ["Remote within Canada."],
+  } });
+  render(<ResumeMatcher />);
+  fillInputs();
+  fireEvent.click(screen.getByRole("button", { name: "Find my match" }));
+  const notes = await screen.findByRole("region", { name: "Job posting notes" });
+  expect(within(notes).getByText("Remote within Canada.")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "No role-specific skills to score" })).toBeInTheDocument();
+  expect(screen.getByLabelText("No skills score")).not.toHaveTextContent("%");
+  expect(screen.queryByRole("region", { name: /Areas to explore/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });

@@ -13,6 +13,8 @@ const matches = [
   { title: "Responsive interface design", detail: "Your skills meet this requirement", met: true },
   { title: "TypeScript experience", detail: "An opportunity to build on", met: false },
 ];
+const matchedSkills = matches.filter(skill => skill.met).length;
+const skillScore = Math.round(1000 * matchedSkills / matches.length) / 10;
 
 function ResumeStep() {
   return (
@@ -25,7 +27,7 @@ function ResumeStep() {
           <FiCheck className="tm-demo-file-check" aria-label="Resume ready" />
         </div>
         <div className="tm-demo-resume-lines" aria-hidden="true"><i /><i /><i /></div>
-        <div className="tm-demo-skills"><span>React</span><span>UI design</span><span>Teamwork</span></div>
+        <div className="tm-demo-skills"><span>React</span><span>UI design</span></div>
         <div className="tm-demo-upload-track" aria-hidden="true"><span /></div>
       </div>
       <p className="tm-demo-success"><FiCheck aria-hidden="true" /> Resume ready. Next, the opportunity.</p>
@@ -42,7 +44,7 @@ function JobStep() {
         <div className="tm-demo-job-copy">
           <p>Build thoughtful, accessible web experiences.</p>
           <p>Bring React skills and an eye for responsive design.</p>
-          <p>Collaborate with a team. Grow with TypeScript.</p>
+          <p>Work in TypeScript. Hybrid in Toronto, two days a week.</p>
         </div>
         <div className="tm-demo-skills"><span>React</span><span>Responsive design</span><span>TypeScript</span></div>
       </div>
@@ -56,10 +58,10 @@ function ResultsStep() {
   return (
     <div className="tm-demo-results">
       <div className="tm-demo-result-summary">
-        <div><span className="tm-demo-document-label">FRONTEND DEVELOPER</span><h3>A strong foundation.</h3><p>You bring a lot to this role.</p></div>
-        <div className="tm-demo-score" role="img" aria-label="Example match score: 75 percent">
+        <div><span className="tm-demo-document-label">FRONTEND DEVELOPER</span><h3>A strong foundation.</h3><p>{matchedSkills} of {matches.length} skills match.</p></div>
+        <div className="tm-demo-score" role="img" aria-label={`Example skill match: ${skillScore} percent`} style={{ "--tm-score-offset": 100 - skillScore }}>
           <svg viewBox="0 0 100 100" aria-hidden="true"><circle className="tm-demo-score-track" cx="50" cy="50" r="44" /><circle className="tm-demo-score-fill" cx="50" cy="50" r="44" pathLength="100" /></svg>
-          <div><strong>75<span>%</span></strong><span>MATCH</span></div>
+          <div><strong>{skillScore}<span>%</span></strong><span>MATCH</span></div>
         </div>
       </div>
       <ul className="tm-demo-match-list">
@@ -67,7 +69,7 @@ function ResultsStep() {
           <li key={title} style={{ "--tm-item": index }}><span className={`tm-demo-match-icon ${met ? "is-met" : "is-gap"}`}>{met ? <FiCheck aria-label="Matched" /> : <FiPlus aria-label="To strengthen" />}</span><div><strong>{title}</strong><span>{detail}</span></div></li>
         ))}
       </ul>
-      <p className="tm-demo-result-note">A little insight. A more confident next move.</p>
+      <p className="tm-demo-result-note">Job note · Hybrid in Toronto, two days a week.</p>
     </div>
   );
 }

@@ -34,6 +34,7 @@ with patch.dict(os.environ, TEST_ENV), patch("dotenv.load_dotenv", return_value=
     from app.infrastructure.database import Base, get_db
     from app.models import GoogleAuthFlow, GoogleAuthTicket, GoogleIdentity, LoginEvent, User, UserSession
     from app.authentication import google as google_auth
+    from app.authentication import limits as auth_limits
 
 ORIGIN = {"Origin": TEST_ENV["FRONTEND_URL"]}
 
@@ -48,6 +49,9 @@ class GoogleAuthTests(unittest.TestCase):
     def setUp(self):
         self.environment = patch.dict(os.environ, TEST_ENV)
         self.environment.start()
+        limiter = patch.object(auth_limits, "auth_limiter", auth_limits.AuthRequestLimiter())
+        limiter.start()
+        self.addCleanup(limiter.stop)
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         Base.metadata.create_all(self.engine)
         self.sessions = sessionmaker(bind=self.engine)

@@ -2,16 +2,13 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { BASE_URL } from "../../services/api";
 import { FiLock } from "react-icons/fi";
-import { useNavigate } from "react-router-dom";
-
-// Helper to read a query param from URL.
-function useQueryParam(param) {
-  return new URLSearchParams(window.location.search).get(param);
-}
+import { useLocation, useNavigate } from "react-router-dom";
 
 // ResetPassword component handles the new password setting form and UI.
 export default function ResetPassword() {
-  const token = useQueryParam("token"); // Token from the reset link
+  const { hash, search } = useLocation();
+  // New links keep the secret in the browser. Earlier emails used the query string.
+  const token = new URLSearchParams(hash.slice(1)).get("token") ?? new URLSearchParams(search).get("token");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [err, setErr] = useState("");

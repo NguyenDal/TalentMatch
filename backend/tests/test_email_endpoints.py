@@ -1,6 +1,9 @@
 """Email endpoint checks using an isolated SQLite database and mocked delivery."""
 
 import os
+import re
+import secrets
+from datetime import datetime, timedelta
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -29,11 +32,42 @@ class EmailEndpointTests(unittest.TestCase):
             result = self.client.post("/request-password-reset/", data={"email": "owner@gmail.com"})
         self.assertEqual(result.status_code, 200, result.text)
         send.assert_awaited_once()
+        token = re.search(r"http://localhost:3000/reset-password#token=([\w-]+)", send.call_args.kwargs["body"]).group(1)
         with self.sessions() as db:
-            token = db.get(auth_tests.User, user_id).reset_token
-        self.assertTrue(token)
-        self.assertIn("http://localhost:3000/reset-password?token=" + token, send.call_args.kwargs["body"])
+            stored = db.get(auth_tests.User, user_id).reset_token
+        self.assertEqual(stored, auth_tests.User.reset_token_digest(token))
+        self.assertNotEqual(stored, token)
         self.assertNotIn(token, result.text)
+        self.assertEqual(self.client.post("/verify-password-reset/", data={"token": token}).status_code, 200)
+        self.assertEqual(self.client.post("/verify-password-reset/", data={"token": stored}).status_code, 400)
+
+    def test_reset_revokes_old_session_and_consumes_link(self):
+        self.local_user()
+        with patch.object(main, "geo_lookup", new_callable=AsyncMock, return_value="Unknown"):
+            session = self.client.post("/login/", data={"username": "Existing", "password": "old-password"})
+        self.assertEqual(session.status_code, 200)
+        headers = {"Authorization": "Bearer " + session.json()["access_token"]}
+        self.assertEqual(self.client.get("/me/", headers=headers).status_code, 200)
+        with patch.object(main, "send_email", new_callable=AsyncMock) as send:
+            self.client.post("/request-password-reset/", data={"email": "owner@gmail.com"})
+        token = re.search(r"#token=([\w-]+)", send.call_args.kwargs["body"]).group(1)
+        self.assertEqual(self.client.post("/reset-password/", data={"token": token, "new_password": "updated-password"}).status_code, 200)
+        self.assertEqual(self.client.get("/me/", headers=headers).status_code, 401)
+        self.assertEqual(self.client.post("/verify-password-reset/", data={"token": token}).status_code, 400)
+
+    def test_legacy_link_works_until_its_original_expiry(self):
+        user_id = self.local_user()
+        token = secrets.token_urlsafe(32)
+        with self.sessions() as db:
+            owner = db.get(auth_tests.User, user_id)
+            owner.reset_token = token
+            owner.reset_token_expiration = datetime.utcnow() + timedelta(minutes=5)
+            db.commit()
+        self.assertEqual(self.client.post("/verify-password-reset/", data={"token": token}).status_code, 200)
+        with self.sessions() as db:
+            db.get(auth_tests.User, user_id).reset_token_expiration = datetime.utcnow() - timedelta(seconds=1)
+            db.commit()
+        self.assertEqual(self.client.post("/verify-password-reset/", data={"token": token}).status_code, 400)
 
     def test_reset_delivery_failure_is_503_and_clears_undelivered_token(self):
         user_id = self.local_user()
@@ -50,7 +84,7 @@ class EmailEndpointTests(unittest.TestCase):
              patch.object(main, "send_email", new_callable=AsyncMock) as send:
             result = self.client.post("/request-password-reset/", data={"email": "owner@gmail.com"})
         self.assertEqual(result.status_code, 200, result.text)
-        self.assertIn("https://talentmatch.onrender.com/reset-password?token=", send.call_args.kwargs["body"])
+        self.assertIn("https://talentmatch.onrender.com/reset-password#token=", send.call_args.kwargs["body"])
 
     def test_unknown_email_is_private_and_does_not_send(self):
         with patch.object(main, "send_email", new_callable=AsyncMock) as send:

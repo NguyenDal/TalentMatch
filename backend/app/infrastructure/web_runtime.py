@@ -6,10 +6,47 @@ from pathlib import Path
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.datastructures import Headers, MutableHeaders
 from starlette.middleware.gzip import GZipMiddleware
 
 MAX_UPLOAD_BODY = 6 * 1024 * 1024
 PUBLIC_ROUTES = {"", "login", "signup", "contact", "request-password-reset", "reset-password", "dashboard"}
+UPLOAD_ERROR_DETAILS = {
+    "/upload-resume": "This upload is too large. Choose a resume under 5 MB and a shorter job description.",
+    "/upload-profile-image": "This upload is too large. Choose a profile picture under 5 MB.",
+}
+
+
+class PrivateResponseHeadersMiddleware:
+    """Prevent account/token caching without disabling public asset caching."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        request_headers = Headers(scope=scope)
+        path = scope.get("path", "").rstrip("/")
+        private_request = (
+            bool(request_headers.get("authorization"))
+            or scope["method"] not in ("GET", "HEAD", "OPTIONS")
+            or path.startswith("/auth/")
+            or path == "/reset-password"
+        )
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.setdefault("X-Content-Type-Options", "nosniff")
+                headers.setdefault("Referrer-Policy", "no-referrer")
+                if private_request or message["status"] in (401, 403) or "set-cookie" in headers:
+                    headers["Cache-Control"] = "no-store"
+                    headers["Pragma"] = "no-cache"
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
 
 
 class UploadBodyLimitMiddleware:
@@ -20,7 +57,8 @@ class UploadBodyLimitMiddleware:
         self.max_bytes = max_bytes
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope.get("path", "").rstrip("/") != "/upload-resume":
+        path = scope.get("path", "").rstrip("/")
+        if scope["type"] != "http" or path not in UPLOAD_ERROR_DETAILS:
             await self.app(scope, receive, send)
             return
         if scope["method"] != "POST":
@@ -32,7 +70,7 @@ class UploadBodyLimitMiddleware:
         except ValueError:
             declared = self.max_bytes + 1
         if declared > self.max_bytes:
-            await self.reject(scope, receive, send)
+            await self.reject(scope, receive, send, UPLOAD_ERROR_DETAILS[path])
             return
         chunks, size = [], 0
         while True:
@@ -42,7 +80,7 @@ class UploadBodyLimitMiddleware:
             body = message.get("body", b"")
             size += len(body)
             if size > self.max_bytes:
-                await self.reject(scope, receive, send)
+                await self.reject(scope, receive, send, UPLOAD_ERROR_DETAILS[path])
                 return
             chunks.append(body)
             if not message.get("more_body", False):
@@ -58,8 +96,8 @@ class UploadBodyLimitMiddleware:
 
         await self.app(scope, bounded_receive, send)
 
-    async def reject(self, scope, receive, send):
-        response = JSONResponse({"detail": "This upload is too large. Choose a resume under 5 MB and a shorter job description."}, status_code=413)
+    async def reject(self, scope, receive, send, detail):
+        response = JSONResponse({"detail": detail}, status_code=413)
         await response(scope, receive, send)
 
 
@@ -67,6 +105,7 @@ def configure_web_runtime(app, frontend_dir=None):
     """Call after API registration so frontend routing cannot hide API errors."""
     app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
     app.add_middleware(UploadBodyLimitMiddleware)
+    app.add_middleware(PrivateResponseHeadersMiddleware)
 
     @app.get("/healthz", include_in_schema=False)
     def health():

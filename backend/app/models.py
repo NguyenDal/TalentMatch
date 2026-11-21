@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Index, func
 from app.infrastructure.database import Base
 from datetime import datetime, timedelta
+import hashlib
 import secrets
 
 
@@ -26,12 +27,21 @@ class User(Base):
     email_verification_expires_at = Column(DateTime, nullable=True)
 
     def generate_reset_token(self, expires_in=3600):
-        self.reset_token = secrets.token_urlsafe(32)
+        token = secrets.token_urlsafe(32)
+        self.reset_token = self.reset_token_digest(token)
         self.reset_token_expiration = datetime.utcnow() + timedelta(seconds=expires_in)
+        return token
+
+    @staticmethod
+    def reset_token_digest(token):
+        return hashlib.sha256(token.encode("ascii")).hexdigest()
 
     def verify_reset_token(self, token):
+        if not self.reset_token or len(token) != 43 or not token.isascii():
+            return False
+        expected = self.reset_token_digest(token) if len(self.reset_token) == 64 else token
         return (
-            self.reset_token == token
+            secrets.compare_digest(self.reset_token, expected)
             and self.reset_token_expiration is not None
             and datetime.utcnow() < self.reset_token_expiration
         )

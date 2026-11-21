@@ -254,11 +254,11 @@ separately reviewed migration.
 
 Use `/healthz` as Render's health-check path. It does not call OpenAI or wake
 Neon. Supported React deep links serve the SPA; API errors remain API errors.
-HTML is revalidated, hashed static assets use immutable caching, and responses
-are gzip-compressed. Page routes load on demand. In the November 2026 build,
-initial JavaScript decreased from 113.70 to 95.78 KB gzip, initial CSS from 18.12
-to 11.77 KB gzip, and the favicon request from 1.4 MB to a 322-byte SVG. Profile
-suggestions reuse a bounded 15-minute cache and share identical in-flight calls.
+Public HTML is revalidated, hashed static assets use immutable caching, and
+responses are gzip-compressed. Account and password-reset responses use
+`no-store`. The public page loads the signed-in workspace and other routes
+on demand. See the [production bundle measurements](frontend/performance/README.md)
+for reproducible byte counts. Profile suggestions share a bounded 15-minute cache.
 
 Matching requires a signed-in user. Limits are a 5 MB resume, 40,000 extracted
 resume characters, and 30,000 job-description characters. Defaults are 10 matching
@@ -267,6 +267,14 @@ configure these through `MATCHES_PER_USER_HOUR`, `MATCHES_PER_HOUR`, and
 `MATCH_CONCURRENCY`. These controls and caches are **process-local**, reset on
 restart, and are **not a persistent billing cap**. Use shared enforcement before
 scaling to multiple workers or instances.
+
+Login, registration, Google authorization starts, and verification-code
+submissions share a rolling budget of 60 requests per resolved source IP per
+10 minutes on this single-worker deployment. The server only uses the client
+address resolved by its trusted proxy configuration. Profile pictures are
+limited to 5 MB and 16 megapixels. The server checks the image format before
+assigning an S3 key. Password recovery stores a digest of each new one-time
+token and revokes previous sessions when the reset completes.
 
 Render Free sleeps after 15 idle minutes, and a later request can take about a
 minute to wake it. Its filesystem is ephemeral; persistent application data stays

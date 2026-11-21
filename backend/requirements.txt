@@ -29,3 +29,4 @@ email-validator
 
 # --- AWS S3 uploads ---
 boto3
+Pillow

@@ -211,7 +211,7 @@ function ProfileDetails() {
               @
               {profile.username}
             </p>}
-            <p>JPG, PNG or WebP</p>
+            <p>JPG, PNG or WebP · Up to 5 MB and 16 megapixels</p>
           </div>
         </div>
         <div className="tm-settings-photo-actions">

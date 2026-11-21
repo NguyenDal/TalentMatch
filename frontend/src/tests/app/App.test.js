@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import axios from "axios";
 import App from "../../app/App";
 
+let mockUser = null;
+
 jest.mock("react-router-dom", () => {
   // CRA's older Jest doesn't resolve package exports. React Router's CommonJS
   // entry provides the same public routing components, without mocking them.
@@ -12,10 +14,11 @@ jest.mock("react-router-dom", () => {
 jest.mock("axios", () => ({ get: jest.fn(), post: jest.fn() }));
 jest.mock("../../contexts/AuthContext", () => ({
   AuthProvider: ({ children }) => children,
-  useAuth: () => ({ user: null, login: jest.fn(), setAuthData: jest.fn() }),
+  useAuth: () => ({ user: mockUser, login: jest.fn(), setAuthData: jest.fn(), logout: jest.fn() }),
 }));
 
 beforeEach(() => {
+  mockUser = null;
   localStorage.clear();
   sessionStorage.clear();
   axios.get.mockResolvedValue({ data: { enabled: true } });
@@ -51,4 +54,25 @@ test("a direct contact visit loads its route while keeping public navigation ava
   expect(await screen.findByRole("heading", { name: /The person behind the match/ }, { timeout: 5000 })).toBeVisible();
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
   expect(window.location.pathname).toBe("/contact");
+});
+
+test("a signed-in visit loads the separate workspace shell and account navigation", async () => {
+  mockUser = { username: "Starlight", token: "test-token" };
+  window.history.replaceState({}, "", "/");
+  render(<App />);
+  expect(await screen.findByRole("navigation", { name: "Workspace navigation" }, { timeout: 5000 })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Find where you fit." }, { timeout: 5000 })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Open account menu for Starlight" }));
+  expect(screen.getByRole("menuitem", { name: "Account settings" })).toHaveAttribute("href", "/dashboard/settings");
+  expect(screen.getByRole("menuitem", { name: "Log out" })).toBeVisible();
+});
+
+test("a signed-in settings deep link keeps its route after loading the workspace shell", async () => {
+  mockUser = { username: "Starlight", token: "test-token" };
+  axios.get.mockResolvedValue({ data: { username: "Starlight", email: "star@example.com", has_password: true } });
+  window.history.replaceState({}, "", "/dashboard/settings/profile");
+  render(<App />);
+  expect(await screen.findByRole("navigation", { name: "Workspace navigation" }, { timeout: 5000 })).toBeVisible();
+  expect(await screen.findByLabelText("Email address", {}, { timeout: 5000 })).toHaveValue("star@example.com");
+  expect(window.location.pathname).toBe("/dashboard/settings/profile");
 });

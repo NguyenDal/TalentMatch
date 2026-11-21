@@ -1,0 +1,31 @@
+{
+  "nodeVersion": "v24.14.0",
+  "gzipLevel": 5,
+  "sourceMaps": false,
+  "assets": [
+    {
+      "file": "static/css/main.97661414.css",
+      "type": "stylesheet",
+      "bytes": 95167,
+      "gzipBytes": 18618
+    },
+    {
+      "file": "static/js/main.32d975e0.js",
+      "type": "javascript",
+      "bytes": 390156,
+      "gzipBytes": 114695
+    }
+  ],
+  "javascript": {
+    "bytes": 390156,
+    "gzipBytes": 114695
+  },
+  "stylesheets": {
+    "bytes": 95167,
+    "gzipBytes": 18618
+  },
+  "total": {
+    "bytes": 485323,
+    "gzipBytes": 133313
+  }
+}

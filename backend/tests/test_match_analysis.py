@@ -5,7 +5,7 @@ import io
 import unittest
 from zipfile import ZipFile, ZIP_DEFLATED
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import httpx
 import openai
@@ -89,6 +89,7 @@ class MatchAnalysisTests(unittest.TestCase):
         result = self.submit()
         self.assertEqual(result.status_code, 401)
         self.create.assert_not_called()
+        self.assertFalse(main.match_limiter.events)
 
     def test_oversized_inputs_stop_before_provider(self):
         cases = [
@@ -106,6 +107,43 @@ class MatchAnalysisTests(unittest.TestCase):
         self.create.side_effect = RuntimeError("provider problem")
         self.assertEqual(self.submit().status_code, 500)
         self.assertEqual(main.match_limiter.active, set())
+
+    def test_exact_resume_and_job_text_limits_are_accepted(self):
+        self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)]
+        result = self.submit(description="j" * 30_000, content=b"r" * 40_000)
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(self.create.call_count, 3)
+
+    def test_hourly_user_and_global_limits_stop_before_provider(self):
+        limiter = MatchLimiter(per_user=1, total=2)
+        self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)] * 2
+        with patch.object(main, "match_limiter", limiter):
+            self.assertEqual(self.submit().status_code, 200)
+            blocked = self.submit()
+            self.assertEqual(blocked.status_code, 429)
+            self.assertEqual(blocked.headers["retry-after"], "3600")
+            self.assertEqual(self.create.call_count, 3)
+            main.app.dependency_overrides[main.get_current_user] = lambda: SimpleNamespace(id=8)
+            self.assertEqual(self.submit().status_code, 200)
+            main.app.dependency_overrides[main.get_current_user] = lambda: SimpleNamespace(id=9)
+            self.assertEqual(self.submit().status_code, 429)
+            self.assertEqual(self.create.call_count, 6)
+        self.assertEqual(limiter.active, set())
+        self.assertEqual(len(limiter.events), 2)
+
+    def test_already_running_match_stops_duplicate_before_provider(self):
+        with main.match_limiter.slot(7):
+            result = self.submit()
+            self.assertEqual(result.status_code, 429)
+            self.assertEqual(result.headers["retry-after"], "15")
+        self.create.assert_not_called()
+        self.assertFalse(main.match_limiter.active)
+
+    def test_input_validation_failure_releases_concurrency_slot(self):
+        result = self.submit(description=" ")
+        self.assertEqual(result.status_code, 422)
+        self.assertFalse(main.match_limiter.active)
+        self.create.assert_not_called()
 
     def test_docx_expansion_limits_are_checked_before_document_loading(self):
         cases = [
@@ -143,6 +181,34 @@ class MatchAnalysisTests(unittest.TestCase):
         result = self.submit(filename="resume.docx", content=content.getvalue())
         self.assertEqual(result.status_code, 200, result.text)
         self.assertEqual(self.create.call_count, 3)
+
+    def test_docx_exact_character_boundary_counts_only_real_separators(self):
+        for paragraphs, status in ((["x" * 40_000], 200), (["x" * 20_000, "y" * 19_999], 200),
+                                   (["x" * 20_000, "y" * 20_000], 413)):
+            with self.subTest(paragraphs=len(paragraphs), status=status):
+                document = main.Document()
+                for text in paragraphs:
+                    document.add_paragraph(text)
+                content = io.BytesIO()
+                document.save(content)
+                self.create.reset_mock()
+                self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)]
+                result = self.submit(filename="resume.docx", content=content.getvalue())
+                self.assertEqual(result.status_code, status, result.text)
+                self.assertEqual(self.create.call_count, 3 if status == 200 else 0)
+
+    def test_pdf_exact_character_boundary_and_incremental_separator_limit(self):
+        for texts, status in ((["x" * 40_000], 200), (["x" * 20_000, "y" * 19_999], 200),
+                              (["x" * 20_000, "y" * 20_000, "Later page"], 413)):
+            pages = [SimpleNamespace(extract_text=Mock(return_value=text)) for text in texts]
+            with self.subTest(pages=len(pages), status=status), patch.object(main.PyPDF2, "PdfReader", return_value=SimpleNamespace(pages=pages)):
+                self.create.reset_mock()
+                self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)]
+                result = self.submit(filename="resume.pdf", content=b"ordinary mocked PDF")
+                self.assertEqual(result.status_code, status, result.text)
+                self.assertEqual(self.create.call_count, 3 if status == 200 else 0)
+                if status == 413:
+                    pages[2].extract_text.assert_not_called()
 
     def test_legacy_model_configuration_keeps_compatible_parameters(self):
         self.create.return_value = response(REQUIREMENTS)

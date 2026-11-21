@@ -4,7 +4,8 @@ import {
   FiGrid, FiLayers, FiMail, FiMessageCircle,
 } from "react-icons/fi";
 import PublicFooter from "../../components/navigation/PublicFooter";
-import portrait from "../../assets/nguyen-dal.jpg";
+import portrait from "../../assets/nguyen-dal-480.webp";
+import portraitRetina from "../../assets/nguyen-dal-960.webp";
 import "./ContactPage.css";
 
 const profile = {
@@ -86,7 +87,16 @@ export default function ContactPage() {
                 <span className="tm-contact-floating-icon tm-contact-floating-code" aria-hidden="true"><FiCode /></span>
                 <span className="tm-contact-floating-icon tm-contact-floating-layers" aria-hidden="true"><FiLayers /></span>
                 <div className="tm-contact-photo-frame">
-                  <img src={portrait} alt="An Nguyen in graduation attire outside Dalhousie University's Faculty of Computer Science" width="1536" height="2048" decoding="async" />
+                  {/* Account for the existing 1.7x CSS zoom when choosing image resolution. */}
+                  <img
+                    src={portrait}
+                    srcSet={`${portrait} 480w, ${portraitRetina} 960w`}
+                    sizes="(max-width: 800px) 408px, 442px"
+                    alt="An Nguyen in graduation attire outside Dalhousie University's Faculty of Computer Science"
+                    width="480"
+                    height="640"
+                    decoding="async"
+                  />
                 </div>
               </div>
               <div className="tm-contact-portrait-caption"><span>AN NGUYEN</span><strong>Applied CS · Full-stack · AI</strong></div>

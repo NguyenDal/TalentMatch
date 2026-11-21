@@ -21,9 +21,10 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.authentication.passwords import verify_password
-from app.authentication.sessions import issue_session, normalized_email, require_username, user_by_email, username_status
+from app.authentication.limits import require_auth_rate_limit
+from app.authentication.sessions import issue_session, normalized_email, require_username, revoke_user_sessions, user_by_email, username_status
 from app.infrastructure.database import get_db
-from app.models import GoogleAuthFlow, GoogleAuthTicket, GoogleIdentity, LoginEvent, User, UserSession
+from app.models import GoogleAuthFlow, GoogleAuthTicket, GoogleIdentity, User
 
 router = APIRouter()
 COOKIE_NAME = "tm_google_browser"
@@ -197,7 +198,7 @@ def username_availability(response: Response, username: str = Query(..., max_len
     return username_status(db, username)
 
 
-@router.get("/auth/google/start/")
+@router.get("/auth/google/start/", dependencies=[Depends(require_auth_rate_limit)])
 def start(request: Request, remember: bool = False, db: Session = Depends(get_db)):
     client_id, _, redirect = require_google()
     state, binding, verifier, nonce = (secrets.token_urlsafe(32) for _ in range(4))
@@ -346,8 +347,7 @@ def confirm_link(body: LinkRequest, request: Request, response: Response, db: Se
     if ticket.authoritative_email and not user.email_verified:
         user.hashed_password = None
         user.clear_reset_token()
-        db.query(LoginEvent).filter(LoginEvent.user_id == user.id).update({"active": False}, synchronize_session=False)
-        db.query(UserSession).filter(UserSession.user_id == user.id).update({"revoked": True}, synchronize_session=False)
+        revoke_user_sessions(db, user.id)
     if ticket.authoritative_email:
         user.email_verified = True
         user.email_verification_code = None

@@ -12,11 +12,21 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.infrastructure.database import get_db
-from app.models import GoogleIdentity, LoginEvent, User
+from app.models import GoogleIdentity, LoginEvent, User, UserSession
 
 ALGORITHM = "HS256"
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]{3,30}$")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+def revoke_user_sessions(db, user_id):
+    """Invalidate current and legacy session records within the caller's transaction."""
+    db.query(UserSession).filter(UserSession.user_id == user_id).update(
+        {"revoked": True}, synchronize_session=False
+    )
+    db.query(LoginEvent).filter(LoginEvent.user_id == user_id).update(
+        {"active": False}, synchronize_session=False
+    )
 
 
 def signing_secret():
@@ -114,9 +124,9 @@ def issue_session(user, request, db, remember=False, location="Location unavaila
         "username": user.username, "sid": session_id, "exp": expiry,
     }
     token = jwt.encode(payload, signing_secret(), algorithm=ALGORITHM)
-    client_ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-    if not client_ip:
-        client_ip = request.client.host if request.client else "Unknown"
+    # The ASGI server resolves forwarding headers only for trusted proxies.
+    # Application code must not independently trust client-supplied headers.
+    client_ip = request.client.host if request.client else "Unknown"
     db.add(LoginEvent(user_id=user.id, ip=client_ip[:45],
                       user_agent=request.headers.get("user-agent", "Unknown device"),
                       location=location, session_id=session_id, active=True))

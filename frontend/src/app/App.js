@@ -1,27 +1,18 @@
-import React, { lazy, Suspense, useEffect, useState } from "react";
+import React, { lazy, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
-import NavBar from "../components/navigation/NavBar";
 import PublicNavBar from "../components/navigation/PublicNavBar";
 import HomeIntro from "../pages/home/HomeIntro";
 import { ThemeProvider } from "../contexts/ThemeContext";
-import "./RouteContent.css";
+import RouteContent from "./RouteContent";
 
 // Keep the landing page available immediately; fetch other screens on demand.
-const ResumeMatcher = lazy(() => import("../pages/matching/ResumeMatcher"));
+const AuthenticatedApp = lazy(() => import("./AuthenticatedApp"));
 const Signup = lazy(() => import("../pages/auth/Signup"));
 const Login = lazy(() => import("../pages/auth/Login"));
 const ResetPassword = lazy(() => import("../pages/auth/ResetPassword"));
 const RequestPasswordReset = lazy(() => import("../pages/auth/RequestPasswordReset"));
-const ProfileSettings = lazy(() => import("../pages/settings/ProfileSettings"));
-const DashboardPage = lazy(() => import("../pages/dashboard/DashboardPage"));
 const ContactPage = lazy(() => import("../pages/contact/ContactPage"));
-
-function RouteContent({ children }) {
-  return <Suspense fallback={<main id="main-content" className="tm-route-loading" aria-busy="true">
-    <p role="status">Loading your page…</p>
-  </main>}>{children}</Suspense>;
-}
 
 function RouteScrollReset() {
   const { pathname, hash } = useLocation();
@@ -30,18 +21,6 @@ function RouteScrollReset() {
   }, [pathname, hash]);
   return null;
 }
-
-// Main authenticated content (with app nav bar)
-const MainContent = () => {
-  const [menu, setMenu] = useState("matcher");
-  return (
-    <div>
-      <NavBar setMenu={setMenu} menu={menu} />
-      {/* Use React Router for actual page routing */}
-      <RouteContent>{menu === "matcher" ? <ResumeMatcher /> : <DashboardPage />}</RouteContent>
-    </div>
-  );
-};
 
 // PublicLayout wraps all public pages in the branded nav and background
 function PublicLayout({ children, landing = false }) {
@@ -78,36 +57,8 @@ const App = () => {
   };
 
   if (user) {
-    // Logged in: use React Router for main app, so profile links work!
-    return (
-      <div className="tm-app-shell">
-      <Routes>
-        <Route path="/" element={<MainContent />} />
-        <Route
-          path="/dashboard/*"
-          element={
-            <>
-              <NavBar setMenu={() => {}} menu="dashboard" />
-              <RouteContent><DashboardPage /></RouteContent>
-            </>
-          }
-        />
-        <Route
-          path="/dashboard/settings/*"
-          element={
-            <>
-              <NavBar setMenu={() => {}} menu="dashboard" />
-              <RouteContent><ProfileSettings /></RouteContent>
-            </>
-          }
-        />
-        {/* If logged in and hit /login or /contact, push back to app */}
-        <Route path="/login" element={<Navigate to="/" replace />} />
-        <Route path="/contact" element={<Navigate to="/" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      </div>
-    );
+    // Public visits do not download the workspace navbar, menu, or shell styles.
+    return <RouteContent><AuthenticatedApp /></RouteContent>;
   }
 
   // Not logged in: show public screens with shared purple nav

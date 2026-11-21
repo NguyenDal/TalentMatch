@@ -12,6 +12,7 @@ import re
 import json
 import hashlib
 from app.infrastructure.s3 import upload_file_to_s3
+from app.infrastructure.avatars import validated_avatar_extension
 from uuid import uuid4
 import httpx
 from app.infrastructure.web_runtime import configure_web_runtime
@@ -25,8 +26,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy import or_, func
 from app.authentication.passwords import hash_password, verify_password
+from app.authentication.limits import require_auth_rate_limit
 from app.models import User, LoginEvent, UserSession, GoogleIdentity, GoogleAuthTicket
-from app.authentication.sessions import (get_current_user, get_current_user_locked, issue_session, normalized_email, require_username,
+from app.authentication.sessions import (get_current_user, get_current_user_locked, issue_session, normalized_email, require_username, revoke_user_sessions,
     set_initial_password, signing_secret, user_by_email, validate_password, USERNAME_PATTERN)
 from app.authentication.google import router as google_auth_router, frontend_origin
 from app.infrastructure.database import get_db
@@ -154,7 +156,7 @@ def extract_text_from_pdf(file):
     chunks, size = [], 0
     for page in pdf_reader.pages:
         text = page.extract_text() or ''
-        size += len(text)
+        size += len(text) + (1 if chunks else 0)
         if size > MAX_RESUME_CHARACTERS:
             raise HTTPException(413, "Please use a resume with 40,000 characters or fewer.")
         chunks.append(text)
@@ -167,7 +169,7 @@ def extract_text_from_docx(file):
     chunks, size = [], 0
     for paragraph in document.paragraphs:
         text = paragraph.text
-        size += len(text) + 1
+        size += len(text) + (1 if chunks else 0)
         if size > MAX_RESUME_CHARACTERS:
             raise HTTPException(413, "Please use a resume with 40,000 characters or fewer.")
         chunks.append(text)
@@ -535,7 +537,7 @@ def upload_resume(
 
 # === USER REGISTRATION ENDPOINT ===
 
-@app.post("/register/")
+@app.post("/register/", dependencies=[Depends(require_auth_rate_limit)])
 def register_user(
     username: str = Form(...),
     email: str = Form(...),
@@ -562,16 +564,15 @@ def register_user(
 
 # === USER LOGIN ENDPOINT ===
 
-@app.post("/login/")
+@app.post("/login/", dependencies=[Depends(require_auth_rate_limit)])
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     remember: bool = Form(False),
     db: Session = Depends(get_db),
 ):
-    client_ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-    if not client_ip:
-        client_ip = request.client.host if request.client else "Unknown"
+    # Use the same trusted-proxy resolution as session audit metadata.
+    client_ip = request.client.host if request.client else "Unknown"
     # Finish network work before taking the account lock. Never await while
     # holding it: another synchronous DB query could block this event loop.
     location = await geo_lookup(client_ip)
@@ -653,13 +654,13 @@ async def request_password_reset(
         return response
 
     email_limiter.reserve_send()
-    user.generate_reset_token(expires_in=3600)  # 1 hour expiry
+    reset_token = user.generate_reset_token(expires_in=3600)
+    stored_digest = user.reset_token
     db.commit()
 
     # Password reset link
     frontend_url = frontend_origin()
-    reset_token = user.reset_token
-    reset_link = f"{frontend_url}/reset-password?token={reset_token}"
+    reset_link = f"{frontend_url}/reset-password#token={reset_token}"
 
     # Compose email
     body = f"""Hello {user.username},
@@ -680,7 +681,7 @@ TalentMatch Team
     except EmailDeliveryError as exc:
         # Only invalidate this send's token; a concurrent successful resend may
         # already have replaced it. Never include a token or provider body in errors.
-        db.query(User).filter(User.id == user.id, User.reset_token == reset_token).update({
+        db.query(User).filter(User.id == user.id, User.reset_token == stored_digest).update({
             User.reset_token: None, User.reset_token_expiration: None,
         }, synchronize_session=False)
         db.commit()
@@ -691,14 +692,25 @@ TalentMatch Team
 
 # --- PASSWORD RESET: Step 2b - Verify a password reset token ---
 
+def user_for_reset(db, token):
+    # Both old and new links contain 32 random bytes encoded as 43 URL-safe
+    # characters. Only records issued before the rollout contain the raw value.
+    invalid = HTTPException(status_code=400, detail="Invalid or expired reset token.")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
+        raise invalid
+    user = db.query(User).filter(
+        User.reset_token.in_((User.reset_token_digest(token), token))
+    ).with_for_update().first()
+    if not user or not user.verify_reset_token(token):
+        raise invalid
+    return user
+
 @app.post("/verify-password-reset/")
 def verify_password_reset(token: str = Form(...), db: Session = Depends(get_db)):
     """
     Verifies the given reset token. If valid and not expired, returns OK.
     """
-    user = db.query(User).filter(User.reset_token == token).with_for_update().first()
-    if not user or not user.verify_reset_token(token):
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+    user = user_for_reset(db, token)
     return {"ok": True, "user_id": user.id, "username": user.username, "email": user.email}
 
 # --- PASSWORD RESET: Step 3 - Reset the user's password using the token ---
@@ -712,14 +724,13 @@ def reset_password(
     """
     Reset the user's password using a valid reset token.
     """
-    user = db.query(User).filter(User.reset_token == token).with_for_update().first()
-    if not user or not user.verify_reset_token(token):
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+    user = user_for_reset(db, token)
 
     validate_password(new_password)
     # Hash and set the new password
     user.hashed_password = hash_password(new_password)
     user.clear_reset_token()
+    revoke_user_sessions(db, user.id)
     db.commit()
 
     return {"ok": True, "message": "Password has been reset successfully."}
@@ -762,7 +773,7 @@ def update_profile(
 # --- PROFILE IMAGE UPLOAD ENDPOINT ---
 
 @app.post("/upload-profile-image/")
-async def upload_profile_image(
+def upload_profile_image(
     image: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -770,13 +781,8 @@ async def upload_profile_image(
     """
     Uploads a profile image for the authenticated user, stores it in S3, and saves the URL in the database.
     """
-    # Optional: Check allowed file types
-    allowed_types = {"image/jpeg", "image/png", "image/webp"}
-    if image.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Unsupported image type")
-
-    # Generate a filename (you can use user ID for uniqueness)
-    filename = f"user_{current_user.id}_{uuid4().hex}.{image.filename.split('.')[-1]}"
+    extension = validated_avatar_extension(image)
+    filename = f"user_{current_user.id}_{uuid4().hex}.{extension}"
 
     # Upload to S3
     s3_url = upload_file_to_s3(image, filename=filename, folder="avatars/")
@@ -938,7 +944,7 @@ TalentMatch Team
     return {"ok": True, "message": "Verification code requested. Please check your inbox."}
 
 
-@app.post("/account/verify-email/")
+@app.post("/account/verify-email/", dependencies=[Depends(require_auth_rate_limit)])
 def verify_email_code(
     code: str = Form(...),
     current_user: User = Depends(get_current_user_locked),
@@ -1108,19 +1114,7 @@ def logout_all_sessions(
     - Marks all their sessions as inactive (or deletes them).
     - Frontend should then clear the local token and redirect to /login.
     """
-    # Revoke all rows in user_sessions for this user (if table used)
-    # Note: UserSession model uses 'revoked' flag instead of 'active'
-    (
-        db.query(UserSession)
-        .filter(UserSession.user_id == current_user.id)
-        .update({"revoked": True}, synchronize_session=False)
-    )
-
-    # Optional: also mark related login_events as inactive, if you use that flag
-    db.query(LoginEvent).filter(LoginEvent.user_id == current_user.id).update(
-        {"active": False}, synchronize_session=False
-    )
-
+    revoke_user_sessions(db, current_user.id)
     db.commit()
     return {"ok": True, "message": "All sessions logged out."}
 

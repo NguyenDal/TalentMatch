@@ -1,10 +1,14 @@
-// Set the API origin at build time for a deployed frontend. Callers add their
-// own leading slash, so normalize a trailing slash here once.
-export const BASE_URL = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/+$/, "");
+// Production serves React and FastAPI together. Keep an absolute base so auth
+// origin checks and URL parsing work, while local development uses port 8000.
+export function resolveApiBaseUrl(configured, environment, origin) {
+  return (configured?.trim() || (environment === "production" ? origin : "http://localhost:8000")).replace(/\/+$/, "");
+}
+
+export const BASE_URL = resolveApiBaseUrl(process.env.REACT_APP_API_URL, process.env.NODE_ENV, window.location.origin);
 
 // Function to generate authorization headers for API requests.
-// It retrieves the JWT token from localStorage and includes it in the headers if available.
+// Match AuthContext's session-first storage order, including Google sign-ins.
 export function getAuthHeaders() {
-  const token = localStorage.getItem("token"); // Retrieve the token from localStorage.
+  const token = sessionStorage.getItem("token") || localStorage.getItem("token");
   return token ? { Authorization: `Bearer ${token}` } : {}; // Return headers with the token if it exists.
 }

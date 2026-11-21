@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import axios from "axios";
 import { FiAlertCircle, FiArrowRight, FiArrowUpRight, FiBriefcase, FiCheck, FiCheckCircle, FiChevronDown, FiFileText, FiLoader, FiMessageSquare, FiPlus, FiTarget, FiUploadCloud, FiX } from "react-icons/fi";
-import { BASE_URL } from "./api";
+import { BASE_URL, getAuthHeaders } from "./api";
 import "./ResumeMatcher.css";
 
 const fileSize = (bytes) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -10,6 +10,8 @@ const emptyAnalysisMessage = "No requirements were returned for this analysis, s
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isNonemptyString = (value) => typeof value === "string" && value.trim().length > 0;
 const isErrorLabel = (value) => typeof value === "string" && /^(error|ai extraction error)$/i.test(value.trim());
+const MAX_RESUME_BYTES = 5 * 1024 * 1024;
+const MAX_JOB_CHARACTERS = 30000;
 
 function matchResultError(data) {
   // Older servers encoded exceptions inside an otherwise successful response.
@@ -50,7 +52,8 @@ export default function ResumeMatcher() {
   const effectiveMissing = [...new Set([...originalMissing, ...userMissing])].filter(req => !userMet.includes(req));
   const requirementsTotal = new Set([...originalMet, ...originalMissing]).size;
   const score = requirementsTotal ? Math.round((effectiveMet.length / requirementsTotal) * 1000) / 10 : 0;
-  const ready = Boolean(resumeFile && jobDesc.trim());
+  const jobError = jobDesc.length > MAX_JOB_CHARACTERS ? "Please shorten the job description to 30,000 characters or fewer." : "";
+  const ready = Boolean(resumeFile && jobDesc.trim() && !jobError);
   const wordCount = jobDesc.trim() ? jobDesc.trim().split(/\s+/).length : 0;
 
   const clearResult = () => {
@@ -70,6 +73,11 @@ export default function ResumeMatcher() {
     const file = files[0];
     if (!/\.(pdf|docx|txt)$/i.test(file.name)) {
       setFileError("Please choose a PDF, DOCX, or TXT file.");
+      if (fileInput.current) fileInput.current.value = "";
+      return;
+    }
+    if (file.size > MAX_RESUME_BYTES) {
+      setFileError("Please choose a resume of 5 MB or smaller.");
       if (fileInput.current) fileInput.current.value = "";
       return;
     }
@@ -96,7 +104,7 @@ export default function ResumeMatcher() {
     formData.append("job_description", jobDesc);
     try {
       const { data } = await axios.post(`${BASE_URL}/upload-resume/`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: { ...getAuthHeaders(), "Content-Type": "multipart/form-data" },
       });
       const responseError = matchResultError(data);
       if (responseError) setError(responseError);
@@ -186,7 +194,7 @@ export default function ResumeMatcher() {
               </> : <>
                 <strong>Drop your resume here</strong>
                 <span>or <span className="tm-workspace-upload-link">browse files <FiArrowUpRight aria-hidden="true" /></span></span>
-                <span id="workspace-file-types" className="tm-workspace-file-types">PDF, DOCX, or TXT</span>
+                <span id="workspace-file-types" className="tm-workspace-file-types">PDF, DOCX, or TXT · Up to 5 MB</span>
               </>}
             </div>
             {resumeFile && <button type="button" className="tm-workspace-remove" onClick={removeFile} disabled={loading}><FiX aria-hidden="true" /> Remove file</button>}
@@ -201,8 +209,10 @@ export default function ResumeMatcher() {
             </div>
             <label className="tm-workspace-field-label" htmlFor="workspace-job-description">Job description</label>
             <textarea id="workspace-job-description" value={jobDesc} disabled={loading} required
+              aria-invalid={jobError ? true : undefined} aria-describedby={jobError ? "workspace-job-error" : undefined}
               onChange={(event) => { setJobDesc(event.target.value); clearResult(); }}
               placeholder={"Paste the full job description here…\n\nInclude the responsibilities, required skills, and qualifications for a clearer match."} />
+            {jobError && <p id="workspace-job-error" role="alert" className="tm-workspace-field-error"><FiAlertCircle aria-hidden="true" /> {jobError}</p>}
             <div className="tm-workspace-job-meta"><span>The full posting gives you more context.</span><span>{wordCount} {wordCount === 1 ? "word" : "words"}</span></div>
           </section>
         </div>

@@ -10,9 +10,15 @@ import openai
 import os
 import re
 import json
+import hashlib
 from app.s3_utils import upload_file_to_s3
 from uuid import uuid4
 import httpx
+from app.web_runtime import configure_web_runtime
+from app.match_limits import (match_limiter, trends_limiter, MAX_RESUME_BYTES, MAX_RESUME_CHARACTERS,
+    MAX_JOB_CHARACTERS, MAX_PDF_PAGES, MAX_PROFILE_PROFESSION_CHARACTERS, MAX_PROFILE_BIO_CHARACTERS)
+from app.document_limits import validate_docx_size
+from app.profile_trends_cache import profile_trends_cache
 
 # === Database & Auth Imports ===
 from sqlalchemy.orm import Session
@@ -33,32 +39,10 @@ import secrets
 
 # === Email Imports for password reset ===
 
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+from app.email_delivery import EmailDeliveryError, send_email
+from app.email_limits import email_limiter
 from email_validator import validate_email, EmailNotValidError
 from pydantic import BaseModel
-
-# Read email config from .env
-MAIL_USERNAME = os.getenv("MAIL_USERNAME")
-MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
-MAIL_FROM = os.getenv("MAIL_FROM")
-MAIL_FROM_NAME = os.getenv("MAIL_FROM_NAME", "TalentMatch")
-MAIL_SERVER = os.getenv("MAIL_SERVER")
-MAIL_PORT = int(os.getenv("MAIL_PORT", 587))
-MAIL_STARTTLS = os.getenv("MAIL_STARTTLS", "True") == "True"
-MAIL_SSL_TLS = os.getenv("MAIL_SSL_TLS", "False") == "True"
-
-conf = ConnectionConfig(
-    MAIL_USERNAME=MAIL_USERNAME,
-    MAIL_PASSWORD=MAIL_PASSWORD,
-    MAIL_FROM=MAIL_FROM,
-    MAIL_FROM_NAME=MAIL_FROM_NAME,
-    MAIL_SERVER=MAIL_SERVER,
-    MAIL_PORT=MAIL_PORT,
-    MAIL_STARTTLS=MAIL_STARTTLS,
-    MAIL_SSL_TLS=MAIL_SSL_TLS,
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True
-)
 
 # === Utility Functions ===
 
@@ -165,15 +149,29 @@ def analysis_http_error(error):
 def extract_text_from_pdf(file):
     """Extract all text from a PDF file (each page)."""
     pdf_reader = PyPDF2.PdfReader(file)
-    text = ''
+    if len(pdf_reader.pages) > MAX_PDF_PAGES:
+        raise HTTPException(413, "Please choose a resume with 25 pages or fewer.")
+    chunks, size = [], 0
     for page in pdf_reader.pages:
-        text += page.extract_text() or ''
-    return text
+        text = page.extract_text() or ''
+        size += len(text)
+        if size > MAX_RESUME_CHARACTERS:
+            raise HTTPException(413, "Please use a resume with 40,000 characters or fewer.")
+        chunks.append(text)
+    return "\n".join(chunks)
 
 def extract_text_from_docx(file):
     """Extract all text from a Word (.docx) file."""
+    validate_docx_size(file)
     document = Document(file)
-    return '\n'.join([para.text for para in document.paragraphs])
+    chunks, size = [], 0
+    for paragraph in document.paragraphs:
+        text = paragraph.text
+        size += len(text) + 1
+        if size > MAX_RESUME_CHARACTERS:
+            raise HTTPException(413, "Please use a resume with 40,000 characters or fewer.")
+        chunks.append(text)
+    return '\n'.join(chunks)
 
 def extract_text(file: UploadFile):
     """
@@ -262,7 +260,7 @@ async def geo_lookup(ip: str) -> str:
 # === OPENAI SETUP ===
 
 openai_api_key = os.getenv("OPENAI_API_KEY")
-client = openai.OpenAI(api_key=openai_api_key) if openai_api_key else None
+client = openai.OpenAI(api_key=openai_api_key, timeout=60.0, max_retries=0) if openai_api_key else None
 MODEL = os.getenv("OPENAI_MODEL", "gpt-6-luna").strip() or "gpt-6-luna"
 
 
@@ -433,10 +431,16 @@ app.add_middleware(
 
 # === Resume Upload & Analysis Endpoint ===
 
+def require_match_slot(current_user: User = Depends(get_current_user)):
+    with match_limiter.slot(current_user.id):
+        yield current_user
+
+
 @app.post("/upload-resume/")
 def upload_resume(
     resume: UploadFile = File(...),
-    job_description: str = Form(...)
+    job_description: str = Form(...),
+    current_user: User = Depends(require_match_slot),
 ):
     """
     Receive user's resume file and job description,
@@ -445,6 +449,13 @@ def upload_resume(
     job_text = job_description.strip()
     if not job_text:
         raise HTTPException(status_code=422, detail="Please paste a job description before checking your match.")
+    if len(job_text) > MAX_JOB_CHARACTERS:
+        raise HTTPException(status_code=413, detail="Please shorten the job description to 30,000 characters or fewer.")
+    resume.file.seek(0, 2)
+    resume_size = resume.file.tell()
+    resume.file.seek(0)
+    if resume_size > MAX_RESUME_BYTES:
+        raise HTTPException(status_code=413, detail="Please choose a resume under 5 MB.")
     try:
         resume_text = extract_text(resume).strip()
     except HTTPException:
@@ -453,6 +464,8 @@ def upload_resume(
         raise HTTPException(status_code=422, detail="We couldn’t read this resume. Please upload a readable, unencrypted PDF, DOCX, or UTF-8 TXT file.") from exc
     if not resume_text:
         raise HTTPException(status_code=422, detail="No readable text was found in this resume. For a scanned PDF, use a text-based version instead.")
+    if len(resume_text) > MAX_RESUME_CHARACTERS:
+        raise HTTPException(status_code=413, detail="Please use a resume with 40,000 characters or fewer.")
     if client is None:
         raise HTTPException(status_code=503, detail="The matching service is not configured yet. Please contact the site owner.")
 
@@ -597,11 +610,21 @@ def get_profile_trends(current_user: User = Depends(get_current_user)):
     """
     Return AI-generated 'trends for you' based on the user's profession and bio.
     """
-    profession = current_user.profession or ""
-    bio = current_user.bio or ""
+    profession = (current_user.profession or "")[:MAX_PROFILE_PROFESSION_CHARACTERS]
+    bio = (current_user.bio or "")[:MAX_PROFILE_BIO_CHARACTERS]
+
+    def create_trends():
+        if not profession.strip() and not bio.strip():
+            return []
+        with trends_limiter.slot(current_user.id):
+            return generate_profile_trends(profession, bio)
 
     try:
-        trends = generate_profile_trends(profession, bio)
+        profile_hash = hashlib.sha256((profession + "\0" + bio).encode("utf-8")).digest()
+        trends = profile_trends_cache.get_or_create(
+            (current_user.id, MODEL, profile_hash),
+            create_trends,
+        )
     except Exception:
         trends = []
 
@@ -611,34 +634,35 @@ def get_profile_trends(current_user: User = Depends(get_current_user)):
 
 @app.post("/request-password-reset/")
 async def request_password_reset(
-    background_tasks: BackgroundTasks,
+    request: Request,
     email: str = Form(...),
     db: Session = Depends(get_db)
 ):
     """
     Generates a secure password reset token for the given email and sends it as a reset link via email.
     """
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found with this email.")
     try:
-        # Validate email
-        validate_email(email)
+        email = validate_email(email.strip(), check_deliverability=False).normalized.lower()
     except EmailNotValidError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    email_limiter.request(email, request.client.host if request.client else None)
+    response = {"ok": True, "message": "If an account exists for this email, a password reset email has been requested."}
+    user = user_by_email(db, email)
+    if not user:
+        return response
+
+    email_limiter.reserve_send()
     user.generate_reset_token(expires_in=3600)  # 1 hour expiry
     db.commit()
 
     # Password reset link
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    reset_link = f"{frontend_url}/reset-password?token={user.reset_token}"
+    frontend_url = frontend_origin()
+    reset_token = user.reset_token
+    reset_link = f"{frontend_url}/reset-password?token={reset_token}"
 
     # Compose email
-    message = MessageSchema(
-        subject="Password Reset Request - TalentMatch",
-        recipients=[email],
-        body=f"""Hello {user.username},
+    body = f"""Hello {user.username},
 
 You requested a password reset for your TalentMatch account.
 
@@ -650,14 +674,19 @@ If you did not request this, just ignore this email.
 
 Thanks,
 TalentMatch Team
-""",
-        subtype="plain"
-    )
-    fm = FastMail(conf)
-    # Send email in the background
-    background_tasks.add_task(fm.send_message, message)
+"""
+    try:
+        await send_email(recipient=email, subject="Password Reset Request - TalentMatch", body=body)
+    except EmailDeliveryError as exc:
+        # Only invalidate this send's token; a concurrent successful resend may
+        # already have replaced it. Never include a token or provider body in errors.
+        db.query(User).filter(User.id == user.id, User.reset_token == reset_token).update({
+            User.reset_token: None, User.reset_token_expiration: None,
+        }, synchronize_session=False)
+        db.commit()
+        raise HTTPException(status_code=503, detail=str(exc)) from None
 
-    return {"ok": True, "message": "Password reset email sent if the email exists in our records."}
+    return response
 
 
 # --- PASSWORD RESET: Step 2b - Verify a password reset token ---
@@ -851,7 +880,7 @@ async def update_account(
 
 @app.post("/account/send-verification/")
 async def send_verification_email(
-    background_tasks: BackgroundTasks,
+    request: Request,
     current_user: User = Depends(get_current_user_locked),
     db: Session = Depends(get_db),
 ):
@@ -867,6 +896,8 @@ async def send_verification_email(
     if getattr(current_user, "email_verified", False):
         raise HTTPException(status_code=400, detail="Email is already verified.")
 
+    email_limiter.request(email, request.client.host if request.client else None)
+    email_limiter.reserve_send()
     # generate verification code – use model helper if present
     if hasattr(current_user, "generate_email_verification_code"):
         code = current_user.generate_email_verification_code(expires_in_minutes=20)
@@ -882,11 +913,7 @@ async def send_verification_email(
     db.commit()
     db.refresh(current_user)
 
-    fm = FastMail(conf)
-    message = MessageSchema(
-        subject="Verify your email - TalentMatch",
-        recipients=[email],
-        body=f"""Hi {current_user.username},
+    body = f"""Hi {current_user.username},
 
 Here is your TalentMatch email verification code:
 
@@ -898,12 +925,17 @@ If you did not request this, you can safely ignore this email.
 
 Thanks,
 TalentMatch Team
-""",
-        subtype="plain",
-    )
-    background_tasks.add_task(fm.send_message, message)
+"""
+    try:
+        await send_email(recipient=email, subject="Verify your email - TalentMatch", body=body)
+    except EmailDeliveryError as exc:
+        db.query(User).filter(User.id == current_user.id, User.email_verification_code == code).update({
+            User.email_verification_code: None, User.email_verification_expires_at: None,
+        }, synchronize_session=False)
+        db.commit()
+        raise HTTPException(status_code=503, detail=str(exc)) from None
 
-    return {"ok": True, "message": "Verification code sent."}
+    return {"ok": True, "message": "Verification code requested. Please check your inbox."}
 
 
 @app.post("/account/verify-email/")
@@ -1106,3 +1138,7 @@ def delete_account(
     db.delete(current_user)
     db.commit()
     return {"ok": True, "message": "Account deleted."}
+
+
+# Register the frontend last: API routes and errors always take precedence.
+configure_web_runtime(app)

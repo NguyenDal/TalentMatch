@@ -1,5 +1,5 @@
 # --- Core web stack ---
-fastapi[all]
+fastapi
 uvicorn[standard]
 
 # --- Environment & config ---
@@ -7,9 +7,6 @@ python-dotenv
 
 # --- OpenAI / AI features ---
 openai
-spacy
-transformers
-torch
 
 # --- File parsing (resume, job description) ---
 PyPDF2

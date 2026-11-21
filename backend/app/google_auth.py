@@ -35,22 +35,34 @@ def digest(value):
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def frontend_origin():
-    configured = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+def application_origin(configured, setting_name):
+    configured = configured.strip().rstrip("/")
     parsed = urlsplit(configured)
     if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.username or parsed.password:
-        raise RuntimeError("FRONTEND_URL must be an http(s) application origin.")
+        raise RuntimeError(f"{setting_name} must be an http(s) application origin.")
     if parsed.path not in ("", "/") or parsed.query or parsed.fragment:
-        raise RuntimeError("FRONTEND_URL must contain an origin only, without a path or query.")
+        raise RuntimeError(f"{setting_name} must contain an origin only, without a path or query.")
     if parsed.scheme == "http" and parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
-        raise RuntimeError("FRONTEND_URL must use HTTPS outside localhost.")
+        raise RuntimeError(f"{setting_name} must use HTTPS outside localhost.")
     return configured
+
+
+def frontend_origin():
+    for setting_name in ("FRONTEND_URL", "RENDER_EXTERNAL_URL"):
+        configured = os.getenv(setting_name, "").strip()
+        if configured:
+            return application_origin(configured, setting_name)
+    return "http://localhost:3000"
 
 
 def google_settings():
     client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
     secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
-    redirect = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback/").strip()
+    redirect = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
+    if not redirect:
+        render_url = os.getenv("RENDER_EXTERNAL_URL", "").strip()
+        backend_origin = application_origin(render_url, "RENDER_EXTERNAL_URL") if render_url else "http://localhost:8000"
+        redirect = f"{backend_origin}/auth/google/callback/"
     parsed = urlsplit(redirect)
     if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.username or parsed.password:
         raise RuntimeError("GOOGLE_REDIRECT_URI must be an http(s) callback URL.")

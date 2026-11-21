@@ -1,18 +1,27 @@
-import React, { useEffect, useState } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import ResumeMatcher from "./ResumeMatcher";
 import { AuthProvider, useAuth } from "./AuthContext";
-import Signup from "./Signup";
-import Login from "./Login";
-import ResetPassword from "./ResetPassword";
-import RequestPasswordReset from "./RequestPasswordReset";
 import NavBar from "./NavBar";
 import PublicNavBar from "./PublicNavBar";
-import ProfileSettings from "./ProfileSettings.js";
-import DashboardPage from "./DashboardPage";
-import ContactPage from "./ContactPage";
 import HomeIntro from "./HomeIntro";
 import { ThemeProvider } from "./ThemeContext";
+import "./RouteContent.css";
+
+// Keep the landing page available immediately; fetch other screens on demand.
+const ResumeMatcher = lazy(() => import("./ResumeMatcher"));
+const Signup = lazy(() => import("./Signup"));
+const Login = lazy(() => import("./Login"));
+const ResetPassword = lazy(() => import("./ResetPassword"));
+const RequestPasswordReset = lazy(() => import("./RequestPasswordReset"));
+const ProfileSettings = lazy(() => import("./ProfileSettings"));
+const DashboardPage = lazy(() => import("./DashboardPage"));
+const ContactPage = lazy(() => import("./ContactPage"));
+
+function RouteContent({ children }) {
+  return <Suspense fallback={<main id="main-content" className="tm-route-loading" aria-busy="true">
+    <p role="status">Loading your page…</p>
+  </main>}>{children}</Suspense>;
+}
 
 function RouteScrollReset() {
   const { pathname, hash } = useLocation();
@@ -29,7 +38,7 @@ const MainContent = () => {
     <div>
       <NavBar setMenu={setMenu} menu={menu} />
       {/* Use React Router for actual page routing */}
-      {menu === "matcher" ? <ResumeMatcher /> : <DashboardPage />}
+      <RouteContent>{menu === "matcher" ? <ResumeMatcher /> : <DashboardPage />}</RouteContent>
     </div>
   );
 };
@@ -40,7 +49,7 @@ function PublicLayout({ children, landing = false }) {
     return (
       <div className="tm-public-page">
         <PublicNavBar variant="landing" />
-        {children}
+        <RouteContent>{children}</RouteContent>
       </div>
     );
   }
@@ -49,7 +58,7 @@ function PublicLayout({ children, landing = false }) {
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-800 via-purple-500 to-blue-400 relative overflow-hidden">
       <PublicNavBar />
       <div className="w-full flex-1 flex items-center justify-center">
-        {children}
+        <RouteContent>{children}</RouteContent>
       </div>
     </div>
   );
@@ -79,7 +88,7 @@ const App = () => {
           element={
             <>
               <NavBar setMenu={() => {}} menu="dashboard" />
-              <DashboardPage />
+              <RouteContent><DashboardPage /></RouteContent>
             </>
           }
         />
@@ -88,7 +97,7 @@ const App = () => {
           element={
             <>
               <NavBar setMenu={() => {}} menu="dashboard" />
-              <ProfileSettings />
+              <RouteContent><ProfileSettings /></RouteContent>
             </>
           }
         />

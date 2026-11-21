@@ -1,7 +1,9 @@
 """Matching API regressions using provider fixtures; no live AI, email, or DB."""
 
 import json
+import io
 import unittest
+from zipfile import ZipFile, ZIP_DEFLATED
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -13,6 +15,7 @@ import openai
 from test_google_auth import TEST_ENV
 from fastapi.testclient import TestClient
 from app import main
+from app.match_limits import MatchLimiter
 
 
 def response(payload, finish="stop"):
@@ -46,11 +49,16 @@ class MatchAnalysisTests(unittest.TestCase):
         self.environment = patch.dict("os.environ", TEST_ENV)
         self.environment.start()
         self.client = TestClient(main.app)
+        main.app.dependency_overrides[main.get_current_user] = lambda: SimpleNamespace(id=7)
+        self.limit_patch = patch.object(main, "match_limiter", MatchLimiter(per_user=100, total=1000))
+        self.limit_patch.start()
         self.create_patch = patch.object(main.client.chat.completions, "create")
         self.create = self.create_patch.start()
 
     def tearDown(self):
         self.create_patch.stop()
+        self.limit_patch.stop()
+        main.app.dependency_overrides.clear()
         self.client.close()
         self.environment.stop()
 
@@ -75,6 +83,66 @@ class MatchAnalysisTests(unittest.TestCase):
             self.assertEqual(call.kwargs["reasoning_effort"], "none")
             self.assertNotIn("temperature", call.kwargs)
             self.assertNotIn("max_tokens", call.kwargs)
+
+    def test_unauthenticated_upload_never_calls_provider(self):
+        main.app.dependency_overrides.clear()
+        result = self.submit()
+        self.assertEqual(result.status_code, 401)
+        self.create.assert_not_called()
+
+    def test_oversized_inputs_stop_before_provider(self):
+        cases = [
+            {"description": "x" * 30_001},
+            {"content": b"x" * 40_001},
+            {"content": b"x" * (5 * 1024 * 1024 + 1)},
+        ]
+        for case in cases:
+            with self.subTest(size=len(case.get("content", case.get("description", "")))):
+                result = self.submit(**case)
+                self.assertEqual(result.status_code, 413, result.text)
+        self.create.assert_not_called()
+
+    def test_failed_provider_request_releases_concurrency_slot(self):
+        self.create.side_effect = RuntimeError("provider problem")
+        self.assertEqual(self.submit().status_code, 500)
+        self.assertEqual(main.match_limiter.active, set())
+
+    def test_docx_expansion_limits_are_checked_before_document_loading(self):
+        cases = [
+            [("word/document.xml", b"x" * (2 * 1024 * 1024 + 1))],
+            [(f"word/media/image{i}.bin", b"x" * (1024 * 1024)) for i in range(21)],
+            [(f"part{i}.bin", b"") for i in range(513)],
+        ]
+        for members in cases:
+            with self.subTest(members=len(members)):
+                archive = io.BytesIO()
+                with ZipFile(archive, "w", compression=ZIP_DEFLATED) as output:
+                    for name, content in members:
+                        output.writestr(name, content)
+                self.assertLess(len(archive.getvalue()), 5 * 1024 * 1024)
+                with patch.object(main, "Document") as document:
+                    result = self.submit(filename="resume.docx", content=archive.getvalue())
+                    self.assertEqual(result.status_code, 413, result.text)
+                    document.assert_not_called()
+        self.create.assert_not_called()
+
+    def test_pdf_page_and_incremental_text_limits_stop_parsing(self):
+        page = SimpleNamespace(extract_text=lambda: "x" * 40_001)
+        for pages in ([page] * 26, [page]):
+            with self.subTest(pages=len(pages)), patch.object(main.PyPDF2, "PdfReader", return_value=SimpleNamespace(pages=pages)):
+                result = self.submit(filename="resume.pdf", content=b"test PDF")
+                self.assertEqual(result.status_code, 413, result.text)
+        self.create.assert_not_called()
+
+    def test_normal_docx_is_still_analyzed(self):
+        document = main.Document()
+        document.add_paragraph("Built a React project with tests.")
+        content = io.BytesIO()
+        document.save(content)
+        self.create.side_effect = [response(REQUIREMENTS), response(MATCHES), response(SUGGESTIONS)]
+        result = self.submit(filename="resume.docx", content=content.getvalue())
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(self.create.call_count, 3)
 
     def test_legacy_model_configuration_keeps_compatible_parameters(self):
         self.create.return_value = response(REQUIREMENTS)

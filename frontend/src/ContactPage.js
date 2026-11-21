@@ -86,7 +86,7 @@ export default function ContactPage() {
                 <span className="tm-contact-floating-icon tm-contact-floating-code" aria-hidden="true"><FiCode /></span>
                 <span className="tm-contact-floating-icon tm-contact-floating-layers" aria-hidden="true"><FiLayers /></span>
                 <div className="tm-contact-photo-frame">
-                  <img src={portrait} alt="An Nguyen in graduation attire outside Dalhousie University's Faculty of Computer Science" width="1536" height="2048" />
+                  <img src={portrait} alt="An Nguyen in graduation attire outside Dalhousie University's Faculty of Computer Science" width="1536" height="2048" decoding="async" />
                 </div>
               </div>
               <div className="tm-contact-portrait-caption"><span>AN NGUYEN</span><strong>Applied CS · Full-stack · AI</strong></div>

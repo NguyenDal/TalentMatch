@@ -17,7 +17,7 @@ A web app to check how well your resume matches a job description, see detailed 
 ## Requirements
 
 - Python 3.10+
-- Node.js (v16+ recommended)
+- Node.js 22+ (the production build uses Node 22)
 - npm (comes with Node.js)
 - [OpenAI API Key](https://platform.openai.com/)
 - PostgreSQL database (Neon Free is supported)
@@ -167,10 +167,13 @@ The frontend accepts popup messages only from the configured API origin and
 the popup it opened. Secrets and authentication tickets never appear in redirect
 URLs. The OAuth callback authorization code is exchanged by the backend.
 
-For deployment, add the exact HTTPS backend callback in Google Cloud, set
-`GOOGLE_REDIRECT_URI` and `FRONTEND_URL` to the deployed URLs, and build the
-frontend with `REACT_APP_API_URL=https://your-api.example.com`. Prefer frontend
-and API domains under the same site. If they are on different sites, set
+For deployment, add the exact HTTPS backend callback in Google Cloud. On Render,
+the backend derives its frontend origin and callback from `RENDER_EXTERNAL_URL`;
+`FRONTEND_URL` and `GOOGLE_REDIRECT_URI` can override these defaults. Elsewhere,
+set both variables to the deployed URLs. The production
+frontend uses its own origin by default; `REACT_APP_API_URL` is only needed
+when intentionally hosting the API elsewhere. Prefer frontend and API on the
+same origin. If they are on different sites, set
 `GOOGLE_COOKIE_SAMESITE=none` with an HTTPS callback; browsers that block third-party
 cookies may still prevent completion, so a same-site API/reverse proxy is preferable.
 Use Google's Audience settings to manage test access and complete branding
@@ -186,7 +189,97 @@ npm test -- --watchAll=false --runInBand
 npm run build
 ```
 
-### 4. Troubleshooting
+### 4. Render Free deployment
+
+Use one **Docker Web Service** on Render's **Free** compute plan and keep the
+existing Neon Free PostgreSQL database. The root `Dockerfile` builds React with
+Node 22, then serves the compiled frontend and FastAPI together using Python 3.13.
+Select the repository root as the Docker build context, `Dockerfile` as the
+Dockerfile path, and leave the service root directory unset. Do not select
+`backend/Dockerfile` for this combined deployment. The container runs one Uvicorn
+worker on `0.0.0.0:$PORT` as a non-root user.
+
+Render supplies an `https://<service>.onrender.com` address and HTTPS certificate;
+a purchased domain is not required. After the service address is known, configure
+these values in Render's backend environment, never in React or committed files:
+
+| Variables | Configuration |
+|---|---|
+| `DATABASE_URL` | Existing Neon's pooled PostgreSQL URL, including TLS parameters. No new Render database is needed. |
+| `SECRET_KEY` | Existing strong JWT signing secret, at least 32 characters. |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | OpenAI credential and `gpt-6-luna`. |
+| `FRONTEND_URL` | Optional override; defaults to Render's `RENDER_EXTERNAL_URL`. Use an exact HTTPS origin without a path. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | TalentMatch's Google OAuth client credentials. |
+| `GOOGLE_REDIRECT_URI`, `GOOGLE_COOKIE_SAMESITE` | Callback defaults to `${RENDER_EXTERNAL_URL}/auth/google/callback/`; override only if needed. Keep the cookie setting `lax`. |
+| `MAIL_PROVIDER`, `SMTP2GO_API_KEY`, `MAIL_FROM` | `smtp2go`, an SMTP2GO API key, and a sender address verified with SMTP2GO. Optional `MAIL_FROM_NAME` defaults to `TalentMatch`. |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_STORAGE_BUCKET_NAME`, `AWS_REGION` | Existing S3 configuration for avatar uploads; the current region is `ca-central-1`. |
+
+Add the exact deployed callback, including its trailing slash, to the Google
+Cloud client's authorized redirect URIs. Keep the localhost callback for local
+development. The shared frontend/API origin allows Google signup and account
+linking to use first-party cookies. Set the Google OAuth audience/publishing
+status appropriately before inviting users.
+
+Render provides `RENDER_EXTERNAL_URL` automatically. Leave `FRONTEND_URL` and
+`GOOGLE_REDIRECT_URI` unset for this single-service deployment: CORS, Google popup
+messages, the OAuth callback, and password-reset email links then use the public
+Render address. Explicit overrides take priority; do not copy localhost values
+from the development `.env` into Render. Outside Render, local defaults remain
+frontend port 3000 and backend callback port 8000.
+
+The Docker image supplies `FRONTEND_DIST_DIR=/app/frontend/build` and disables
+frontend source-map generation. Leave `REACT_APP_API_URL` unset for this topology;
+local development still defaults to `http://localhost:8000`. `.dockerignore`
+excludes developer `.env` files, local dependencies, and build artifacts.
+The app does not migrate or initialize the database at startup: verify the
+existing Neon schema before deployment; use a direct Neon connection for any
+separately reviewed migration.
+
+Use `/healthz` as Render's health-check path. It does not call OpenAI or wake
+Neon. Supported React deep links serve the SPA; API errors remain API errors.
+HTML is revalidated, hashed static assets use immutable caching, and responses
+are gzip-compressed. Page routes load on demand. In the November 2026 build,
+initial JavaScript decreased from 113.70 to 95.78 KB gzip, initial CSS from 18.12
+to 11.77 KB gzip, and the favicon request from 1.4 MB to a 322-byte SVG. Profile
+suggestions reuse a bounded 15-minute cache and share identical in-flight calls.
+
+Matching requires a signed-in user. Limits are a 5 MB resume, 40,000 extracted
+resume characters, and 30,000 job-description characters. Defaults are 10 matching
+attempts per user per hour, 100 across the service per hour, and two concurrent matches;
+configure these through `MATCHES_PER_USER_HOUR`, `MATCHES_PER_HOUR`, and
+`MATCH_CONCURRENCY`. These controls and caches are **process-local**, reset on
+restart, and are **not a persistent billing cap**. Use shared enforcement before
+scaling to multiple workers or instances.
+
+Render Free sleeps after 15 idle minutes, and a later request can take about a
+minute to wake it. Its filesystem is ephemeral; persistent application data stays
+in Neon and uploaded avatars stay in S3. Render Free blocks common SMTP ports,
+so production password-reset and verification emails use SMTP2GO's HTTPS API.
+Delivery needs the verified sender and working API credentials. Free hosting is
+subject to plan limits; OpenAI and S3 remain separately metered, and email has its
+own allowance. This deployment path does not restart, modify, or delete Railway
+services. See [Render Free limits](https://render.com/docs/free),
+[Render HTTPS](https://render.com/docs/tls), and [Neon limits](https://neon.com/pricing).
+
+Validation before deploying:
+
+```powershell
+# From backend: mocked external services and isolated fixtures
+python -B -m unittest discover -s tests -p "test_*.py"
+# From frontend
+npm test -- --watchAll=false --runInBand
+npm run build
+# From repository root, when Docker is available
+docker build -t talentmatch .
+```
+
+PostgreSQL concurrency tests run only when explicitly given a disposable branch
+through `TALENTMATCH_TEST_DATABASE_URL` and `TALENTMATCH_POSTGRES_TEST_HOST`; leave
+these unset for ordinary checks. After Render reports the deploy live, verify
+`/healthz`, `/login`, a direct `/contact` visit, Google sign-in, email delivery,
+and one authenticated match. A successful build alone does not verify those flows.
+
+### 5. Troubleshooting
 #### CORS error?
 Ensure the backend allows http://localhost:3000 in CORSMiddleware settings.
 
@@ -199,7 +292,7 @@ Use a non-password-protected, standard PDF.
 #### Dependency errors?
 Upgrade pip: pip install --upgrade pip and try again.
 
-### 5. Security
+### 6. Security
 #### a. Password Hashing
 
 - User passwords are never stored in plain text.
@@ -238,7 +331,7 @@ Upgrade pip: pip install --upgrade pip and try again.
 
 - Never commit your .env to git or share it publicly.
 
-### 6. Database
+### 7. Database
 
 TalentMatch uses PostgreSQL through SQLAlchemy and psycopg2. `DATABASE_URL` selects
 the host; there is no automatic SQLite fallback. User accounts, password hashes,
@@ -312,6 +405,6 @@ python -m app.check_tables
 `init_db` creates missing tables; it does not migrate existing data, alter old
 columns, or reset a database. The application does not initialize tables at startup.
 
-### 7. License
+### 8. License
 Apache License.
 Feel free to use, fork, or contribute!

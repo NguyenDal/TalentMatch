@@ -1,0 +1,11 @@
+.tm-route-loading {
+  min-height: 60vh;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  color: #6d6b7c;
+  background: #faf9f7;
+  font: 500 14px/1.6 "Inter", "Segoe UI", sans-serif;
+}
+.dark .tm-route-loading { color: #b4a9c7; background: #15121e; }

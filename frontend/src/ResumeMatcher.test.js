@@ -13,7 +13,11 @@ const fillInputs = (file = resume()) => {
   return file;
 };
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
+});
 
 test("requires a supported resume and nonempty description, and removal resets readiness", () => {
   render(<ResumeMatcher />);
@@ -49,6 +53,7 @@ test("accepts a single dropped DOCX and rejects multiple dropped files without r
 });
 
 test("submits the selected file and role, displays results, supports adjustments and Q&A", async () => {
+  sessionStorage.setItem("token", "matching-session");
   let resolve;
   axios.post.mockImplementation(() => new Promise(done => { resolve = done; }));
   render(<ResumeMatcher />);
@@ -57,10 +62,11 @@ test("submits the selected file and role, displays results, supports adjustments
   expect(screen.getByRole("button", { name: "Finding your match…" })).toBeDisabled();
   expect(screen.getByRole("textbox", { name: "Job description" })).toBeDisabled();
   expect(screen.getByLabelText("Replace resume")).toBeDisabled();
-  const [url, body] = axios.post.mock.calls[0];
+  const [url, body, config] = axios.post.mock.calls[0];
   expect(url).toBe(`${BASE_URL}/upload-resume/`);
   expect(body.get("resume")).toBe(file);
   expect(body.get("job_description")).toBe("React and TypeScript development");
+  expect(config.headers.Authorization).toBe("Bearer matching-session");
   await act(async () => resolve({ data: {
     met_requirements: ["React"], missing_requirements: ["TypeScript"],
     requirement_explanations: { React: "Found React projects.", TypeScript: "Add a TypeScript example." },
@@ -91,6 +97,31 @@ test("shows request errors inline and retains inputs for a retry", async () => {
   await waitFor(() => expect(screen.getByRole("button", { name: "Find my match" })).toBeEnabled());
   expect(screen.getByText("experience.pdf")).toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "Job description" })).toHaveValue("React and TypeScript development");
+});
+
+test("rejects oversized resumes before making an upload request", () => {
+  render(<ResumeMatcher />);
+  const file = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "large.pdf", { type: "application/pdf" });
+  fireEvent.change(screen.getByLabelText("Upload your resume"), { target: { files: [file] } });
+  expect(screen.getByRole("alert")).toHaveTextContent("5 MB or smaller");
+  expect(screen.getByRole("button", { name: "Find my match" })).toBeDisabled();
+  expect(axios.post).not.toHaveBeenCalled();
+});
+
+test("explains long job descriptions without silently truncating the pasted text", () => {
+  render(<ResumeMatcher />);
+  fillInputs();
+  const description = screen.getByRole("textbox", { name: "Job description" });
+  const text = "a".repeat(30001);
+  fireEvent.change(description, { target: { value: text } });
+  expect(description).toHaveValue(text);
+  expect(description).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByRole("alert")).toHaveTextContent("30,000 characters or fewer");
+  expect(screen.getByRole("button", { name: "Find my match" })).toBeDisabled();
+  fireEvent.change(description, { target: { value: text.slice(0, 30000) } });
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Find my match" })).toBeEnabled();
+  expect(axios.post).not.toHaveBeenCalled();
 });
 
 test("empty analysis explains that no score was calculated without blaming the posting", async () => {

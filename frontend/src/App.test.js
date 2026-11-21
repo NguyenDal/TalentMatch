@@ -26,7 +26,8 @@ afterEach(() => jest.restoreAllMocks());
 test("public login routes to username-only signup and back, with Google available on both", async () => {
   window.history.replaceState({}, "", "/login");
   render(<App />);
-  expect(screen.getByRole("heading", { name: "Welcome back." })).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent("Loading your page");
+  expect(await screen.findByRole("heading", { name: "Welcome back." })).toBeVisible();
   await waitFor(() => expect(screen.getByRole("button", { name: "Continue with Google" })).toBeEnabled());
   expect(screen.getByLabelText("Username or email")).toBeVisible();
   fireEvent.click(screen.getByRole("link", { name: "Create an account" }));
@@ -40,4 +41,13 @@ test("public login routes to username-only signup and back, with Google availabl
   fireEvent.click(screen.getAllByRole("link", { name: "Log in" }).at(-1));
   expect(await screen.findByRole("heading", { name: "Welcome back." })).toBeVisible();
   expect(window.location.pathname).toBe("/login");
+});
+
+test("a direct contact visit loads its route while keeping public navigation available", async () => {
+  window.history.replaceState({}, "", "/contact");
+  render(<App />);
+  expect(screen.getByRole("link", { name: "TalentMatch home" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: /The person behind the match/ })).toBeVisible();
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  expect(window.location.pathname).toBe("/contact");
 });

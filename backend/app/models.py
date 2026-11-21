@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Index, func
-from app.database import Base
+from app.infrastructure.database import Base
 from datetime import datetime, timedelta
 import secrets
 

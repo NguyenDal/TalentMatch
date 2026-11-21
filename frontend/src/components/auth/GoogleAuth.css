@@ -1,0 +1,27 @@
+.tm-google-auth { margin: 26px 0 24px; }
+.tm-google-button { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 50px; border: 1px solid var(--auth-border); border-radius: 8px; background: var(--auth-surface); color: var(--auth-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .2s, background .2s; }
+.tm-google-button:hover:not(:disabled) { border-color: var(--auth-accent); }
+.tm-google-button:focus-visible, .tm-google-cancel:focus-visible { outline: 2px solid var(--auth-accent); outline-offset: 3px; }
+.tm-google-button:disabled { opacity: .6; cursor: default; }
+.tm-google-button svg { flex-shrink: 0; }
+.tm-auth-divider { display: flex; align-items: center; gap: 14px; margin-top: 24px; color: var(--auth-muted); font-size: 11px; }
+.tm-auth-divider::before, .tm-auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--auth-border); }
+.tm-google-help { color: var(--auth-muted); font-size: 12px; line-height: 1.7; margin: 10px 0 0; }
+.tm-google-dialog { box-sizing: border-box; width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); margin: auto; padding: 32px; overflow-y: auto; border: 1px solid var(--auth-border); border-radius: 18px; background: var(--auth-surface); color: var(--auth-text); box-shadow: 0 24px 90px #0004; }
+.tm-google-dialog::backdrop { background: #100c22ad; backdrop-filter: blur(5px); }
+.dark .tm-google-dialog::backdrop { background: #000b; }
+.tm-google-dialog-mark { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; margin-bottom: 20px; border: 1px solid var(--auth-border); border-radius: 12px; }
+.tm-google-dialog h2 { margin: 0 0 12px; font-size: 25px; line-height: 1.25; font-weight: 700; letter-spacing: -.6px; }
+.tm-google-dialog > p { margin: 0 0 24px; color: var(--auth-muted); font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.tm-google-dialog strong { color: var(--auth-text); font-weight: 600; }
+.tm-google-dialog-actions { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.tm-google-cancel { flex-shrink: 0; min-height: 50px; border: 1px solid var(--auth-border); border-radius: 8px; padding: 0 18px; background: transparent; color: var(--auth-text); font-size: 12px; font-weight: 600; cursor: pointer; }
+.tm-google-cancel:disabled { opacity: .6; cursor: default; }
+.tm-username-status { margin: 7px 0 0; color: var(--auth-muted); font-size: 11px; line-height: 1.5; min-height: 17px; }
+.tm-username-field[data-status="available"] .tm-auth-input-wrap { border-color: #21825c; box-shadow: 0 0 0 1px #21825c; }
+.tm-username-field[data-status="available"] .tm-username-status { color: #16754e; }
+.tm-username-field[data-status="invalid"] .tm-auth-input-wrap, .tm-username-field[data-status="unavailable"] .tm-auth-input-wrap { border-color: #c03949; box-shadow: 0 0 0 1px #c03949; }
+.tm-username-field[data-status="invalid"] .tm-username-status, .tm-username-field[data-status="unavailable"] .tm-username-status, .tm-username-field[data-status="error"] .tm-username-status { color: #bc3041; }
+.dark .tm-username-field[data-status="available"] .tm-username-status { color: #83d9b2; }
+.dark .tm-username-field[data-status="invalid"] .tm-username-status, .dark .tm-username-field[data-status="unavailable"] .tm-username-status, .dark .tm-username-field[data-status="error"] .tm-username-status { color: #ff9eaa; }
+@media (max-width: 520px) { .tm-google-dialog { padding: 24px; } .tm-google-dialog-actions { gap: 8px; } .tm-google-cancel { padding: 0 14px; } }

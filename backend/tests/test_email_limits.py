@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import HTTPException
 
-from app.email_limits import EmailLimiter
+from app.infrastructure.email_limits import EmailLimiter
 
 
 class EmailLimitTests(unittest.TestCase):

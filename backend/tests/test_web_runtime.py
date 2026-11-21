@@ -7,8 +7,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from app.match_limits import MatchLimiter
-from app.web_runtime import configure_web_runtime, MAX_UPLOAD_BODY
+from app.matching.limits import MatchLimiter
+from app.infrastructure.web_runtime import configure_web_runtime, MAX_UPLOAD_BODY
 
 
 class WebRuntimeTests(unittest.TestCase):

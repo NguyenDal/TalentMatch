@@ -4,7 +4,7 @@ from threading import Event
 
 from fastapi import HTTPException
 
-from app.profile_trends_cache import ProfileTrendsCache
+from app.matching.profile_trends_cache import ProfileTrendsCache
 
 
 class ProfileTrendsCacheTests(unittest.TestCase):

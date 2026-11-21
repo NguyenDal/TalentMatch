@@ -15,7 +15,7 @@ import openai
 from test_google_auth import TEST_ENV
 from fastapi.testclient import TestClient
 from app import main
-from app.match_limits import MatchLimiter
+from app.matching.limits import MatchLimiter
 
 
 def response(payload, finish="stop"):

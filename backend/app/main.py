@@ -11,25 +11,25 @@ import os
 import re
 import json
 import hashlib
-from app.s3_utils import upload_file_to_s3
+from app.infrastructure.s3 import upload_file_to_s3
 from uuid import uuid4
 import httpx
-from app.web_runtime import configure_web_runtime
-from app.match_limits import (match_limiter, trends_limiter, MAX_RESUME_BYTES, MAX_RESUME_CHARACTERS,
+from app.infrastructure.web_runtime import configure_web_runtime
+from app.matching.limits import (match_limiter, trends_limiter, MAX_RESUME_BYTES, MAX_RESUME_CHARACTERS,
     MAX_JOB_CHARACTERS, MAX_PDF_PAGES, MAX_PROFILE_PROFESSION_CHARACTERS, MAX_PROFILE_BIO_CHARACTERS)
-from app.document_limits import validate_docx_size
-from app.profile_trends_cache import profile_trends_cache
+from app.matching.document_limits import validate_docx_size
+from app.matching.profile_trends_cache import profile_trends_cache
 
 # === Database & Auth Imports ===
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy import or_, func
-from app.auth import hash_password, verify_password
-from app.models import User, LoginEvent, UserSession, GoogleIdentity
-from app.auth_sessions import (get_current_user, get_current_user_locked, issue_session, normalized_email, require_username,
+from app.authentication.passwords import hash_password, verify_password
+from app.models import User, LoginEvent, UserSession, GoogleIdentity, GoogleAuthTicket
+from app.authentication.sessions import (get_current_user, get_current_user_locked, issue_session, normalized_email, require_username,
     set_initial_password, signing_secret, user_by_email, validate_password, USERNAME_PATTERN)
-from app.google_auth import router as google_auth_router, frontend_origin
-from app.database import get_db
+from app.authentication.google import router as google_auth_router, frontend_origin
+from app.infrastructure.database import get_db
 
 # === JWT Handling ===
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
@@ -39,8 +39,8 @@ import secrets
 
 # === Email Imports for password reset ===
 
-from app.email_delivery import EmailDeliveryError, send_email
-from app.email_limits import email_limiter
+from app.infrastructure.email_delivery import EmailDeliveryError, send_email
+from app.infrastructure.email_limits import email_limiter
 from email_validator import validate_email, EmailNotValidError
 from pydantic import BaseModel
 
@@ -1126,7 +1126,7 @@ def logout_all_sessions(
 
 @app.delete("/account/delete/")
 def delete_account(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_locked),
     db: Session = Depends(get_db),
 ):
     """
@@ -1135,8 +1135,19 @@ def delete_account(
     ('Are you sure? This action cannot be undone.')
     before calling this endpoint.
     """
-    db.delete(current_user)
-    db.commit()
+    try:
+        # The authenticated user row stays locked until this single transaction
+        # completes. Legacy session/login foreign keys do not cascade on delete.
+        user_id = current_user.id
+        db.query(UserSession).filter(UserSession.user_id == user_id).delete(synchronize_session=False)
+        db.query(LoginEvent).filter(LoginEvent.user_id == user_id).delete(synchronize_session=False)
+        db.query(GoogleAuthTicket).filter(GoogleAuthTicket.target_user_id == user_id).delete(synchronize_session=False)
+        db.query(GoogleIdentity).filter(GoogleIdentity.user_id == user_id).delete(synchronize_session=False)
+        db.delete(current_user)
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Account could not be deleted. Please try again.") from None
     return {"ok": True, "message": "Account deleted."}
 
 

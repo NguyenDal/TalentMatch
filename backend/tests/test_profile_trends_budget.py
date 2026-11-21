@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 from test_google_auth import TEST_ENV
 from app import main
-from app.match_limits import MatchLimiter
-from app.profile_trends_cache import ProfileTrendsCache
+from app.matching.limits import MatchLimiter
+from app.matching.profile_trends_cache import ProfileTrendsCache
 
 
 class ProfileTrendsBudgetTests(unittest.TestCase):

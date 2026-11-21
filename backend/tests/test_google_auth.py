@@ -30,10 +30,10 @@ with patch.dict(os.environ, TEST_ENV), patch("dotenv.load_dotenv", return_value=
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy.pool import StaticPool
     from app.main import app
-    from app.auth import hash_password, verify_password
-    from app.database import Base, get_db
+    from app.authentication.passwords import hash_password, verify_password
+    from app.infrastructure.database import Base, get_db
     from app.models import GoogleAuthFlow, GoogleAuthTicket, GoogleIdentity, LoginEvent, User, UserSession
-    from app import google_auth
+    from app.authentication import google as google_auth
 
 ORIGIN = {"Origin": TEST_ENV["FRONTEND_URL"]}
 

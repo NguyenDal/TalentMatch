@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 import test_google_auth  # noqa: F401 - bootstrap app imports with isolated credentials
-from app.google_auth import frontend_origin, google_settings
+from app.authentication.google import frontend_origin, google_settings
 
 
 class PublicOriginTests(unittest.TestCase):

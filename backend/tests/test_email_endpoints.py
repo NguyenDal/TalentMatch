@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, patch
 
 import test_google_auth as auth_tests
 from app import main
-from app.auth_sessions import get_current_user_locked
-from app.email_delivery import EmailDeliveryError, DELIVERY_ERROR
-from app.email_limits import EmailLimiter
+from app.authentication.sessions import get_current_user_locked
+from app.infrastructure.email_delivery import EmailDeliveryError, DELIVERY_ERROR
+from app.infrastructure.email_limits import EmailLimiter
 
 
 class EmailEndpointTests(unittest.TestCase):

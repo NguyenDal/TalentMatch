@@ -2,11 +2,13 @@
 
 A web app to check how well your resume matches a job description, see detailed requirement breakdown, and get personalized job application insights.
 
+[Open TalentMatch](https://talentmatch-2fmb.onrender.com/)
+
 ---
 
 ## Features
 
-- Upload a resume (PDF or TXT)
+- Upload a resume (PDF, DOCX, or TXT)
 - Paste a job description
 - Instantly see a match score and which requirements are met/missing
 - Get smart, tailored Q&A for your application
@@ -26,8 +28,22 @@ A web app to check how well your resume matches a job description, see detailed 
 ## Setup Instructions
 
 ### 1. Clone the Repository
-git clone https://github.com/NguyenDal/Resume-Matcher.git
-cd Resume-Matcher
+
+```sh
+git clone https://github.com/NguyenDal/TalentMatch.git
+cd TalentMatch
+```
+
+### Repository layout
+
+| Directory | Contents |
+| --- | --- |
+| `backend/app/` | FastAPI entry point and database models, with packages for authentication, matching, infrastructure, and database commands |
+| `backend/tests/` | API, database, and service regression tests |
+| `frontend/src/pages/` | Route components and styles grouped by feature |
+| `frontend/src/components/` | Shared authentication, navigation, and theme controls |
+| `frontend/src/tests/` | React component, flow, and utility tests |
+| `frontend/public/` | Static files included in the web build |
 
 ### 2. Backend Setup (FastAPI)
 

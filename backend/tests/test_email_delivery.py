@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app import email_delivery
+from app.infrastructure import email_delivery
 
 
 class EmailDeliveryTests(unittest.IsolatedAsyncioTestCase):
@@ -16,7 +16,7 @@ class EmailDeliveryTests(unittest.IsolatedAsyncioTestCase):
             "MAIL_FROM": "sender@example.com", "MAIL_FROM_NAME": "TalentMatch",
         }, clear=True)
         self.env.start()
-        self.http = patch("app.email_delivery.httpx.AsyncClient")
+        self.http = patch("app.infrastructure.email_delivery.httpx.AsyncClient")
         self.client_class = self.http.start()
         self.client = self.client_class.return_value.__aenter__.return_value
         self.client.post = AsyncMock()

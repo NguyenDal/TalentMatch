@@ -23,10 +23,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 from app.main import app
-from app.database import get_db
-from app.auth import hash_password
+from app.infrastructure.database import get_db
+from app.authentication.passwords import hash_password
 from app.models import GoogleAuthFlow, GoogleAuthTicket, GoogleIdentity, LoginEvent, User, UserSession
-from app import google_auth
+from app.authentication import google as google_auth
 
 
 @unittest.skipUnless(os.getenv("TALENTMATCH_TEST_DATABASE_URL") and os.getenv("TALENTMATCH_POSTGRES_TEST_HOST"),

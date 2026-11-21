@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html.dark {
+  --tm-dark-chrome: #191919;
+  --tm-dark-bg: #212121;
+  --tm-dark-section: #242424;
+  --tm-dark-surface: #292929;
+  --tm-dark-inset: #1c1c1c;
+  --tm-dark-soft: #333333;
+  --tm-dark-border: #454545;
+  --tm-dark-ink: #f5f5f5;
+  --tm-dark-muted: #b4b4b4;
+  --tm-dark-accent: #ededed;
+}
+
+html.dark { color-scheme: dark; background: var(--tm-dark-bg); }
+html.dark body { background: var(--tm-dark-bg); color: var(--tm-dark-ink); }
+html.dark ::selection { color: #fff; background: #454545; }
+.dark .tm-password-reset input::placeholder { color: var(--tm-dark-muted); }
+.dark .tm-password-reset input { background: var(--tm-dark-inset); }
+.dark .tm-password-reset input:-webkit-autofill { -webkit-text-fill-color: #d4d4d4; -webkit-box-shadow: 0 0 0 100px var(--tm-dark-inset) inset; caret-color: #d4d4d4; }
+.dark .tm-password-reset input:focus-visible,
+.dark .tm-password-reset button:focus-visible,
+.dark .tm-dashboard input:focus-visible,
+.dark .tm-dashboard a:focus-visible,
+.dark .tm-dashboard button:focus-visible { outline: 2px solid #d4d4d4; outline-offset: 4px; }
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

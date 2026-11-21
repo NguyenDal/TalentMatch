@@ -17,5 +17,6 @@
 **/*.dump
 **/*.backup
 backend/tests
+frontend/src/tests
 frontend/src/**/*.test.js
 frontend/src/setupTests.js

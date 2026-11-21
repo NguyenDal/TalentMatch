@@ -156,18 +156,19 @@
 .dark .tm-nav {
   --tm-nav-text: var(--tm-dark-ink);
   --tm-nav-muted: var(--tm-dark-muted);
-  --tm-nav-focus: #d4d4d4;
+  --tm-nav-focus: var(--tm-dark-accent);
   background: var(--tm-dark-chrome);
   border-bottom-color: var(--tm-dark-border);
   color-scheme: dark;
 }
 
 .dark .tm-nav--landing .tm-nav__brand-dot,
+.dark .tm-nav .tm-nav__link.active,
 .dark .tm-nav--landing .tm-nav__link:hover { color: var(--tm-dark-accent); }
 
 .dark .tm-nav .tm-nav__brand-mark,
-.dark .tm-nav .tm-nav__login-button { background: var(--tm-dark-accent); color: #101010; }
-.dark .tm-nav .tm-nav__login-button:hover { background: #fff; box-shadow: none; }
+.dark .tm-nav .tm-nav__login-button { background: var(--tm-dark-primary); color: var(--tm-dark-primary-ink); }
+.dark .tm-nav .tm-nav__login-button:hover { background: var(--tm-dark-primary-hover); box-shadow: none; }
 
 .dark .tm-nav--landing .tm-nav__mobile-links {
   background: var(--tm-dark-surface);

@@ -80,7 +80,7 @@ export default function ResetPassword() {
             </div>
             <button
               onClick={() => navigate("/")}
-              className="w-full py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-950 font-bold text-lg shadow transition"
+              className="w-full py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white dark:bg-[var(--tm-dark-primary)] dark:hover:bg-[var(--tm-dark-primary-hover)] dark:text-white font-bold text-lg shadow transition"
             >
               Back to Login
             </button>
@@ -105,7 +105,7 @@ export default function ResetPassword() {
             </div>
             <button
               onClick={() => navigate("/")}
-              className="w-full py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-950 font-bold text-lg shadow transition"
+              className="w-full py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white dark:bg-[var(--tm-dark-primary)] dark:hover:bg-[var(--tm-dark-primary-hover)] dark:text-white font-bold text-lg shadow transition"
             >
               Go to Login
             </button>
@@ -152,7 +152,7 @@ export default function ResetPassword() {
             {err && <div className="text-red-500 dark:text-red-300 text-sm">{err}</div>}
             <button
               type="submit"
-              className="w-full py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-950 font-bold text-lg shadow transition"
+              className="w-full py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white dark:bg-[var(--tm-dark-primary)] dark:hover:bg-[var(--tm-dark-primary-hover)] dark:text-white font-bold text-lg shadow transition"
               disabled={loading}
             >
               {loading ? "Resetting..." : "Set New Password"}
@@ -162,7 +162,7 @@ export default function ResetPassword() {
             Remembered?{" "}
             <button
               onClick={() => navigate("/")}
-              className="text-purple-600 dark:text-neutral-200 font-semibold hover:underline"
+              className="text-purple-600 dark:text-[var(--tm-dark-accent)] font-semibold hover:underline"
               type="button"
             >
               Back to Login

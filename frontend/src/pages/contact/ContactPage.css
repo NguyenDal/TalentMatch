@@ -82,13 +82,13 @@
   --contact-surface: var(--tm-dark-surface);
   --contact-tint: var(--tm-dark-soft);
 }
-.dark .tm-contact-button-primary { color: #101010; background: var(--tm-dark-accent); border-color: var(--tm-dark-accent); }
-.dark .tm-contact-button-primary:hover { background: #fff; border-color: #fff; }
-.dark .tm-contact-button-outline:hover, .dark .tm-contact-channel:hover { border-color: #737373; }
+.dark .tm-contact-button-primary { color: var(--tm-dark-primary-ink); background: var(--tm-dark-primary); border-color: var(--tm-dark-primary); }
+.dark .tm-contact-button-primary:hover { background: var(--tm-dark-primary-hover); border-color: var(--tm-dark-primary-hover); }
+.dark .tm-contact-button-outline:hover, .dark .tm-contact-channel:hover { border-color: var(--tm-dark-accent); }
 .dark .tm-contact-portrait::before { background: radial-gradient(ellipse, #ffffff08 0%, #ffffff03 53%, transparent 73%); }
 .dark .tm-contact-orbit { border-color: #383838; }
 .dark .tm-contact-photo-frame { background: var(--tm-dark-soft); border-color: #404040; box-shadow: 0 15px 35px #00000030; }
-.dark .tm-contact-floating-icon { color: #d4d4d4; box-shadow: 0 7px 18px #0003; }
+.dark .tm-contact-floating-icon { color: var(--tm-dark-accent); box-shadow: 0 7px 18px #0003; }
 .dark .tm-contact-toolkit li { color: #bdbdbd; background: var(--tm-dark-soft); border-color: var(--tm-dark-border); }
 .dark .tm-contact-project-number { color: var(--tm-dark-muted); }
 .dark .tm-contact-work { background: var(--tm-dark-inset); }

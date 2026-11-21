@@ -17,9 +17,9 @@
 
 .tm-theme-toggle:hover { color: #7152e8; background: #f1ecfb; border-color: #b4a1df; }
 .tm-theme-toggle:focus-visible { outline: 3px solid #8c6fe9; outline-offset: 4px; }
-.dark .tm-theme-toggle { color: #d4d4d4; background: var(--tm-dark-surface); border-color: var(--tm-dark-border); }
-.dark .tm-theme-toggle:hover { color: #fff; background: #333333; border-color: #737373; }
-.dark .tm-theme-toggle:focus-visible { outline-color: #d4d4d4; }
+.dark .tm-theme-toggle { color: var(--tm-dark-accent); background: var(--tm-dark-surface); border-color: var(--tm-dark-border); }
+.dark .tm-theme-toggle:hover { color: var(--tm-dark-accent); background: var(--tm-dark-soft); border-color: var(--tm-dark-accent); }
+.dark .tm-theme-toggle:focus-visible { outline-color: var(--tm-dark-accent); }
 .tm-theme-toggle--app { margin-left: 16px; }
 
 @media (prefers-reduced-motion: reduce) {

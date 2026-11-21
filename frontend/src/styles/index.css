@@ -12,7 +12,10 @@ html.dark {
   --tm-dark-border: #454545;
   --tm-dark-ink: #f5f5f5;
   --tm-dark-muted: #b4b4b4;
-  --tm-dark-accent: #ededed;
+  --tm-dark-accent: #c4b5fd;
+  --tm-dark-primary: #7152e8;
+  --tm-dark-primary-hover: #6041d0;
+  --tm-dark-primary-ink: #fff;
 }
 
 html.dark { color-scheme: dark; background: var(--tm-dark-bg); }
@@ -25,7 +28,7 @@ html.dark ::selection { color: #fff; background: #454545; }
 .dark .tm-password-reset button:focus-visible,
 .dark .tm-dashboard input:focus-visible,
 .dark .tm-dashboard a:focus-visible,
-.dark .tm-dashboard button:focus-visible { outline: 2px solid #d4d4d4; outline-offset: 4px; }
+.dark .tm-dashboard button:focus-visible { outline: 2px solid var(--tm-dark-accent); outline-offset: 4px; }
 
 @keyframes shimmer {
   0% {

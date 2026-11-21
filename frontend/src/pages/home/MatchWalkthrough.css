@@ -97,7 +97,7 @@
 .dark .tm-demo-window { box-shadow: 0 24px 55px #00000030, 0 3px 7px #00000020; }
 .dark .tm-demo-dropzone { border-color: #525252; }
 .dark .tm-demo-file { box-shadow: 0 7px 16px #0003; }
-.dark .tm-demo-analyze { background: var(--tm-dark-accent); color: #101010; }
+.dark .tm-demo-analyze { background: var(--tm-dark-primary); color: var(--tm-dark-primary-ink); }
 .dark .tm-demo-step-nav button[aria-pressed="true"] .tm-demo-step-number { color: #101010; }
 @media (max-width: 1100px) and (min-width: 801px) { .tm-demo-step-nav button { font-size: 9px; gap: 5px; } .tm-demo-step-nav { gap: 7px; } .tm-demo-step-number { width: 21px; height: 21px; } }
 @media (max-width: 520px) {

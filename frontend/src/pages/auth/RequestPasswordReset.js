@@ -73,7 +73,7 @@ export default function RequestPasswordReset() {
             {err && <div className="text-red-500 dark:text-red-300 text-sm">{err}</div>}
             <button
               type="submit"
-              className="w-full py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-950 font-bold text-lg shadow transition"
+              className="w-full py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white dark:bg-[var(--tm-dark-primary)] dark:hover:bg-[var(--tm-dark-primary-hover)] dark:text-white font-bold text-lg shadow transition"
               disabled={loading}
             >
               {loading ? "Sending..." : "Send Reset Link"}

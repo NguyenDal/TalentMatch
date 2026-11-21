@@ -13,9 +13,9 @@
   background: var(--tm-app-bg);
 }
 .dark .tm-settings {
-  --settings-primary: var(--tm-dark-accent);
-  --settings-primary-ink: #111;
-  --settings-focus: #b8b8b8;
+  --settings-primary: var(--tm-dark-primary);
+  --settings-primary-ink: var(--tm-dark-primary-ink);
+  --settings-focus: var(--tm-dark-accent);
   --settings-success: #93cbb0;
   --settings-success-bg: #121e18;
   --settings-danger: #eea3a3;
@@ -59,6 +59,7 @@
 .tm-settings-button svg { width: 15px; height: 15px; flex-shrink: 0; }
 .tm-settings-button--primary { background: var(--settings-primary); color: var(--settings-primary-ink); }
 .tm-settings-button--primary:hover:not(:disabled) { filter: brightness(.94); }
+.dark .tm-settings-button--primary:hover:not(:disabled) { background: var(--tm-dark-primary-hover); filter: none; }
 .tm-settings-button--secondary, .tm-settings-icon-button { background: var(--tm-app-surface); border-color: var(--tm-app-border); color: var(--tm-app-ink); }
 .tm-settings-button--secondary:hover:not(:disabled), .tm-settings-icon-button:hover:not(:disabled) { background: var(--tm-app-soft); border-color: var(--tm-app-muted); }
 .tm-settings-button--danger { background: transparent; border-color: var(--tm-app-border); color: var(--settings-danger); }

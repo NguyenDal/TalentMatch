@@ -167,7 +167,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <button
-                className="border border-blue-400 text-blue-500 hover:bg-blue-100 dark:border-neutral-500 dark:text-neutral-200 dark:hover:bg-[var(--tm-dark-soft)] font-semibold px-6 py-2 rounded-3xl transition"
+                className="border border-blue-400 text-blue-500 hover:bg-blue-100 dark:border-neutral-500 dark:text-[var(--tm-dark-accent)] dark:hover:bg-[var(--tm-dark-soft)] font-semibold px-6 py-2 rounded-3xl transition"
                 onClick={() => navigate("/dashboard/settings/profile")}
               >
                 Profile settings
@@ -182,8 +182,8 @@ export default function DashboardPage() {
                   className={
                     "py-3 font-semibold transition border-b-2 " +
                     (tab === t
-                      ? "border-blue-500 text-blue-600 dark:text-white dark:border-neutral-200"
-                      : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-blue-400 dark:hover:text-white")
+                      ? "border-blue-500 text-blue-600 dark:text-[var(--tm-dark-accent)] dark:border-[var(--tm-dark-accent)]"
+                      : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-blue-400 dark:hover:text-[var(--tm-dark-accent)]")
                   }
                 >
                   {t}
@@ -227,7 +227,7 @@ export default function DashboardPage() {
           <div className="bg-white dark:bg-[var(--tm-dark-surface)] dark:text-neutral-100 rounded-2xl shadow-md mb-6 p-5">
             <input
               type="text"
-              className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-[var(--tm-dark-inset)] text-gray-800 dark:text-neutral-100 px-4 py-2 mb-3 focus:ring-2 focus:ring-blue-100 dark:focus:ring-neutral-400"
+              className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-[var(--tm-dark-inset)] text-gray-800 dark:text-neutral-100 px-4 py-2 mb-3 focus:ring-2 focus:ring-blue-100 dark:focus:ring-[var(--tm-dark-accent)]"
               placeholder="🔍  Search ..."
             />
             <div className="font-bold mb-3 text-gray-800 dark:text-neutral-100">Hot topics</div>
@@ -238,7 +238,7 @@ export default function DashboardPage() {
                   <div className="font-semibold text-sm text-gray-800 dark:text-neutral-100">Jane Doe</div>
                   <div className="text-xs text-gray-500 dark:text-neutral-400">@Nickname</div>
                 </div>
-                <button className="ml-auto px-3 py-1 rounded-2xl bg-blue-100 text-blue-600 font-bold text-xs dark:bg-[var(--tm-dark-soft)] dark:text-neutral-200">
+                <button className="ml-auto px-3 py-1 rounded-2xl bg-blue-100 text-blue-600 font-bold text-xs dark:bg-[var(--tm-dark-soft)] dark:text-[var(--tm-dark-accent)]">
                   Read
                 </button>
               </div>
@@ -248,11 +248,11 @@ export default function DashboardPage() {
                   <div className="font-semibold text-sm text-gray-800 dark:text-neutral-100">John Doe</div>
                   <div className="text-xs text-gray-500 dark:text-neutral-400">@Nickname</div>
                 </div>
-                <button className="ml-auto px-3 py-1 rounded-2xl bg-blue-100 text-blue-600 font-bold text-xs dark:bg-[var(--tm-dark-soft)] dark:text-neutral-200">
+                <button className="ml-auto px-3 py-1 rounded-2xl bg-blue-100 text-blue-600 font-bold text-xs dark:bg-[var(--tm-dark-soft)] dark:text-[var(--tm-dark-accent)]">
                   Read
                 </button>
               </div>
-              <button className="text-blue-500 dark:text-neutral-200 text-xs mt-2 ml-2">
+              <button className="text-blue-500 dark:text-[var(--tm-dark-accent)] text-xs mt-2 ml-2">
                 Show more...
               </button>
             </div>
@@ -295,7 +295,7 @@ export default function DashboardPage() {
                         href={buildLinkedInJobsUrl(trend)}
                         target="_blank"
                         rel="noreferrer"
-                        className="font-semibold text-blue-600 dark:text-neutral-200 hover:underline"
+                        className="font-semibold text-blue-600 dark:text-[var(--tm-dark-accent)] hover:underline"
                         title="View related jobs on LinkedIn"
                       >
                         {trend.tag || `#${trend.type || "topic"}`}
@@ -306,7 +306,7 @@ export default function DashboardPage() {
                           href={buildCourseraUrl(trend)}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-neutral-400 border border-gray-200 dark:border-neutral-700 rounded-full px-2 py-[2px] hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-[var(--tm-dark-soft)] dark:hover:text-white transition"
+                          className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-neutral-400 border border-gray-200 dark:border-neutral-700 rounded-full px-2 py-[2px] hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-[var(--tm-dark-soft)] dark:hover:text-[var(--tm-dark-accent)] transition"
                           title="View related courses on Coursera"
                         >
                           {trend.type}
@@ -324,7 +324,7 @@ export default function DashboardPage() {
                         href={trend.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs text-blue-500 dark:text-neutral-200 mt-1 hover:underline"
+                        className="text-xs text-blue-500 dark:text-[var(--tm-dark-accent)] mt-1 hover:underline"
                       >
                         Learn more →
                       </a>

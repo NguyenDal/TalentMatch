@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import {
   FiArrowDown, FiArrowRight, FiArrowUpRight,
-  FiFileText, FiLayers, FiMessageCircle, FiTarget, FiUpload,
+  FiBriefcase, FiFileText, FiLayers, FiTarget, FiUpload,
 } from "react-icons/fi";
 import "./HomeIntro.css";
 import MatchWalkthrough from "./MatchWalkthrough";
@@ -20,25 +20,22 @@ export default function HomeIntro() {
         <section className="tm-hero" aria-labelledby="tm-hero-title">
           <div className="tm-container tm-hero-grid">
             <div className="tm-hero-copy">
-              <div className="tm-eyebrow"><span /> BIG AMBITIONS. CLEARER NEXT STEPS.</div>
-              <h1 id="tm-hero-title">Your next move.<br />A clearer <span>match.</span></h1>
-              <p className="tm-hero-description">Find open roles that match your experience. Pick a posting to check your skills and prepare a résumé, cover letter, and answers for that application.</p>
+              <h1 id="tm-hero-title">Find your fit.<br /><span>Make your case.</span></h1>
+              <p className="tm-hero-description">Search employer job boards or paste a posting. Compare the skills it asks for with your experience, then tailor your résumé, cover letter, and application answers to the role.</p>
               <div className="tm-hero-actions">
-                <Link className="tm-button tm-button-primary" to="/signup">Find my match <FiArrowUpRight aria-hidden="true" /></Link>
-                <a className="tm-button tm-button-text" href="#how-it-works">See how it works <FiArrowDown aria-hidden="true" /></a>
+                <Link className="tm-button tm-button-primary" to="/signup">Find jobs <FiArrowUpRight aria-hidden="true" /></Link>
+                <a className="tm-button tm-button-text" href="#how-it-works">How it works <FiArrowDown aria-hidden="true" /></a>
               </div>
-              <div className="tm-hero-note"><span className="tm-note-line" /> A resume. A job description. A fresh perspective.</div>
+              <p className="tm-hero-note"><FiFileText aria-hidden="true" /> PDF, DOCX, or TXT résumés up to 5 MB</p>
             </div>
             <MatchWalkthrough />
           </div>
         </section>
 
-        <section className="tm-benefits" aria-label="What TalentMatch helps you do">
-          <div className="tm-container tm-benefits-inner">
-            <p>A little insight.<br /><strong>A more intentional job search.</strong></p>
-            <div><FiFileText aria-hidden="true" /><span>Understand the role</span></div>
-            <div><FiTarget aria-hidden="true" /><span>Recognize your strengths</span></div>
-            <div><FiMessageCircle aria-hidden="true" /><span>Prepare with purpose</span></div>
+        <section className="tm-job-sources" aria-labelledby="tm-job-sources-title">
+          <div className="tm-container tm-source-list">
+            <h2 id="tm-job-sources-title"><FiBriefcase aria-hidden="true" /> Employer boards you can search</h2>
+            <ul><li>Affirm</li><li>D2L</li><li>Mozilla</li></ul>
           </div>
         </section>
 

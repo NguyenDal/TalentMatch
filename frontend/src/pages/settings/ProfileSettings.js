@@ -792,11 +792,11 @@ export default function ProfileSettings() {
     <header className="tm-settings-header">
       <div>
         <Link
-          to="/dashboard"
+          to="/jobs"
           className="tm-settings-back"
         >
           <FiArrowLeft aria-hidden="true" />
-          Back to dashboard
+          Back to job search
         </Link>
         <h1>
           Settings

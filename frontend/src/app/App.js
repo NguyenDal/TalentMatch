@@ -5,6 +5,7 @@ import PublicNavBar from "../components/navigation/PublicNavBar";
 import HomeIntro from "../pages/home/HomeIntro";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import RouteContent from "./RouteContent";
+import { workspaceTools } from "./workspaceRoutes";
 
 // Keep the landing page available immediately; fetch other screens on demand.
 const AuthenticatedApp = lazy(() => import("./AuthenticatedApp"));
@@ -58,7 +59,7 @@ const App = () => {
 
   if (user) {
     // Public visits do not download the workspace navbar, menu, or shell styles.
-    return <RouteContent><AuthenticatedApp /></RouteContent>;
+    return <RouteContent><AuthenticatedApp key={user.email || user.username} /></RouteContent>;
   }
 
   // Not logged in: show public screens with shared purple nav
@@ -114,6 +115,7 @@ const App = () => {
         }
       />
       {/* Any unknown public route → home intro */}
+      {workspaceTools.map(({ path }) => <Route key={path} path={path} element={<PublicLayout landing><Login /></PublicLayout>} />)}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

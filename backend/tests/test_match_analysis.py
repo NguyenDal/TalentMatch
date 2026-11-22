@@ -15,6 +15,7 @@ import openai
 from test_google_auth import TEST_ENV
 from fastapi.testclient import TestClient
 from app import main
+from app.matching import documents
 from app.matching.limits import MatchLimiter
 
 
@@ -226,7 +227,7 @@ class MatchAnalysisTests(unittest.TestCase):
                     for name, content in members:
                         output.writestr(name, content)
                 self.assertLess(len(archive.getvalue()), 5 * 1024 * 1024)
-                with patch.object(main, "Document") as document:
+                with patch.object(documents, "Document") as document:
                     result = self.submit(filename="resume.docx", content=archive.getvalue())
                     self.assertEqual(result.status_code, 413, result.text)
                     document.assert_not_called()
@@ -235,13 +236,13 @@ class MatchAnalysisTests(unittest.TestCase):
     def test_pdf_page_and_incremental_text_limits_stop_parsing(self):
         page = SimpleNamespace(extract_text=lambda: "x" * 40_001)
         for pages in ([page] * 26, [page]):
-            with self.subTest(pages=len(pages)), patch.object(main.PyPDF2, "PdfReader", return_value=SimpleNamespace(pages=pages)):
+            with self.subTest(pages=len(pages)), patch.object(documents.PyPDF2, "PdfReader", return_value=SimpleNamespace(pages=pages)):
                 result = self.submit(filename="resume.pdf", content=b"test PDF")
                 self.assertEqual(result.status_code, 413, result.text)
         self.create.assert_not_called()
 
     def test_normal_docx_is_still_analyzed(self):
-        document = main.Document()
+        document = documents.Document()
         document.add_paragraph("Built a React project with tests.")
         content = io.BytesIO()
         document.save(content)
@@ -254,7 +255,7 @@ class MatchAnalysisTests(unittest.TestCase):
         for paragraphs, status in ((["x" * 40_000], 200), (["x" * 20_000, "y" * 19_999], 200),
                                    (["x" * 20_000, "y" * 20_000], 413)):
             with self.subTest(paragraphs=len(paragraphs), status=status):
-                document = main.Document()
+                document = documents.Document()
                 for text in paragraphs:
                     document.add_paragraph(text)
                 content = io.BytesIO()
@@ -269,7 +270,7 @@ class MatchAnalysisTests(unittest.TestCase):
         for texts, status in ((["x" * 40_000], 200), (["x" * 20_000, "y" * 19_999], 200),
                               (["x" * 20_000, "y" * 20_000, "Later page"], 413)):
             pages = [SimpleNamespace(extract_text=Mock(return_value=text)) for text in texts]
-            with self.subTest(pages=len(pages), status=status), patch.object(main.PyPDF2, "PdfReader", return_value=SimpleNamespace(pages=pages)):
+            with self.subTest(pages=len(pages), status=status), patch.object(documents.PyPDF2, "PdfReader", return_value=SimpleNamespace(pages=pages)):
                 self.create.reset_mock()
                 self.create.side_effect = [response(POSTING), response(MATCHES), response(SUGGESTIONS)]
                 result = self.submit(filename="resume.pdf", content=b"ordinary mocked PDF")

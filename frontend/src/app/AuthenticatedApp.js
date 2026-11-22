@@ -1,43 +1,30 @@
-import React, { lazy, useState } from "react";
+import React, { lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import NavBar from "../components/navigation/NavBar";
+import { ApplicationMaterialsProvider } from "../contexts/ApplicationMaterials";
 import RouteContent from "./RouteContent";
+import { workspaceTools } from "./workspaceRoutes";
 
+const JobSearch = lazy(() => import("../pages/jobs/JobSearch"));
 const ResumeMatcher = lazy(() => import("../pages/matching/ResumeMatcher"));
-const DashboardPage = lazy(() => import("../pages/dashboard/DashboardPage"));
+const ApplicationToolPage = lazy(() => import("../pages/application-tools/ApplicationToolPage"));
 const ProfileSettings = lazy(() => import("../pages/settings/ProfileSettings"));
 
-function MainContent() {
-  const [menu, setMenu] = useState("matcher");
-  return (
-    <div>
-      <NavBar setMenu={setMenu} menu={menu} />
-      <RouteContent>{menu === "matcher" ? <ResumeMatcher /> : <DashboardPage />}</RouteContent>
-    </div>
-  );
-}
-
 export default function AuthenticatedApp() {
-  return (
+  return <ApplicationMaterialsProvider>
     <div className="tm-app-shell">
-      <Routes>
-        <Route path="/" element={<MainContent />} />
-        <Route path="/dashboard/*" element={
-          <>
-            <NavBar setMenu={() => {}} menu="dashboard" />
-            <RouteContent><DashboardPage /></RouteContent>
-          </>
-        } />
-        <Route path="/dashboard/settings/*" element={
-          <>
-            <NavBar setMenu={() => {}} menu="dashboard" />
-            <RouteContent><ProfileSettings /></RouteContent>
-          </>
-        } />
-        <Route path="/login" element={<Navigate to="/" replace />} />
-        <Route path="/contact" element={<Navigate to="/" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <NavBar />
+      <RouteContent>
+        <Routes>
+          <Route path="/jobs" element={<JobSearch />} />
+          <Route path="/job-fit" element={<ResumeMatcher />} />
+          {workspaceTools.filter(item => item.tool).map(({ path, tool }) =>
+            <Route key={tool} path={path} element={<ApplicationToolPage key={tool} tool={tool} />} />
+          )}
+          <Route path="/dashboard/settings/*" element={<ProfileSettings />} />
+          <Route path="*" element={<Navigate to="/jobs" replace />} />
+        </Routes>
+      </RouteContent>
     </div>
-  );
+  </ApplicationMaterialsProvider>;
 }

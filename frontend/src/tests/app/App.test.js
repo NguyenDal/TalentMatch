@@ -22,6 +22,7 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   axios.get.mockResolvedValue({ data: { enabled: true } });
+  axios.post.mockResolvedValue({ data: { jobs: [], unavailable_boards: [], stale_boards: [] } });
   jest.spyOn(window, "scrollTo").mockImplementation(() => {});
 });
 afterEach(() => jest.restoreAllMocks());
@@ -61,10 +62,30 @@ test("a signed-in visit loads the separate workspace shell and account navigatio
   window.history.replaceState({}, "", "/");
   render(<App />);
   expect(await screen.findByRole("navigation", { name: "Workspace navigation" }, { timeout: 5000 })).toBeVisible();
-  expect(await screen.findByRole("heading", { name: "Find where you fit." }, { timeout: 5000 })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Find jobs." }, { timeout: 5000 })).toBeVisible();
+  expect(window.location.pathname).toBe("/jobs");
   fireEvent.click(screen.getByRole("button", { name: "Open account menu for Starlight" }));
   expect(screen.getByRole("menuitem", { name: "Account settings" })).toHaveAttribute("href", "/dashboard/settings");
   expect(screen.getByRole("menuitem", { name: "Log out" })).toBeVisible();
+});
+
+test("an old dashboard link opens job search and passes a selected posting to the application tools", async () => {
+  mockUser = { username: "Starlight", token: "test-token" };
+  axios.post.mockResolvedValue({ data: { jobs: [
+    { id: 42, board: "mozilla", company: "Mozilla", title: "Data analyst", location: "Remote Canada", url: "https://example.org/careers/42", matched_terms: [] },
+  ] } });
+  axios.get.mockImplementation(url => Promise.resolve({ data: url.endsWith("/42/") ? { description: "Build reports with SQL." } : {} }));
+  window.history.replaceState({}, "", "/dashboard");
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: /Mozilla Data analyst/ }));
+  expect(await screen.findByRole("link", { name: "Employer posting" })).toBeVisible();
+  fireEvent.click(await screen.findByRole("button", { name: "Check job fit" }));
+  expect(await screen.findByRole("textbox", { name: "Job description" })).toHaveValue("Data analyst — Mozilla\n\nRemote Canada\n\nBuild reports with SQL.");
+  fireEvent.change(screen.getByLabelText("Upload your resume"), { target: { files: [new File(["SQL reporting"], "analyst.txt")] } });
+  fireEvent.click(screen.getByRole("link", { name: "Cover letter" }));
+  expect(await screen.findByText("analyst.txt")).toBeVisible();
+  expect((await screen.findByRole("textbox", { name: "Job description" })).value).toContain("Build reports with SQL.");
+  expect(screen.queryByText(/Lorem Followers/)).not.toBeInTheDocument();
 });
 
 test("a signed-in settings deep link keeps its route after loading the workspace shell", async () => {

@@ -42,12 +42,9 @@ test("avatar menu supports keyboard navigation, Escape focus return and outside 
   const avatar = await renderNav();
   fireEvent.keyDown(avatar, { key: "ArrowDown" });
   expect(avatar).toHaveAttribute("aria-expanded", "true");
-  const dashboard = screen.getByRole("menuitem", { name: "Dashboard" });
   const settings = screen.getByRole("menuitem", { name: "Account settings" });
-  expect(dashboard).toHaveFocus();
-  fireEvent.keyDown(dashboard, { key: "ArrowDown" });
   expect(settings).toHaveFocus();
-  fireEvent.keyDown(settings, { key: "End" });
+  fireEvent.keyDown(settings, { key: "ArrowDown" });
   expect(screen.getByRole("menuitem", { name: "Log out" })).toHaveFocus();
   fireEvent.keyDown(settings, { key: "Escape" });
   expect(screen.queryByRole("menu")).not.toBeInTheDocument();
@@ -64,9 +61,9 @@ test("menu routes to settings, closes and retains working workspace navigation",
   expect(screen.getByTestId("route")).toHaveTextContent("/dashboard/settings/profile");
   expect(await screen.findByRole("button", { name: "Change picture" })).toBeVisible();
   expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
-  await act(async () => { fireEvent.click(screen.getByRole("link", { name: "Job matching" })); });
-  expect(screen.getByTestId("route")).toHaveTextContent(/^\/$/);
+  expect(screen.queryByRole("link", { name: "Dashboard" })).not.toBeInTheDocument();
+  await act(async () => { fireEvent.click(screen.getByRole("link", { name: "Check job fit" })); });
+  expect(screen.getByTestId("route")).toHaveTextContent("/job-fit");
   fireEvent.click(avatar);
   fireEvent.click(screen.getByRole("menuitem", { name: "Log out" }));
   expect(mockLogout).toHaveBeenCalledTimes(1);

@@ -9,8 +9,8 @@ import MatchWalkthrough from "./MatchWalkthrough";
 
 const steps = [
   { icon: FiUpload, title: "Start with your story", description: "Upload your resume. Bring your experience, projects, and skills together in one place.", note: "YOUR RESUME" },
-  { icon: FiFileText, title: "Add the opportunity", description: "Paste a job description for a role that interests you. We help break down what it asks for.", note: "THE JOB DESCRIPTION" },
-  { icon: FiTarget, title: "See the bigger picture", description: "Explore your match, spot gaps, and use tailored Q&A to prepare for your next step.", note: "A CLEARER DIRECTION" },
+  { icon: FiFileText, title: "Choose a role", description: "Find an opening on an employer’s job board or paste a job description you already have.", note: "THE JOB DESCRIPTION" },
+  { icon: FiTarget, title: "Prepare your application", description: "Check your skills against the posting, tailor your résumé and cover letter, and work through application questions.", note: "YOUR APPLICATION" },
 ];
 
 export default function HomeIntro() {
@@ -22,7 +22,7 @@ export default function HomeIntro() {
             <div className="tm-hero-copy">
               <div className="tm-eyebrow"><span /> BIG AMBITIONS. CLEARER NEXT STEPS.</div>
               <h1 id="tm-hero-title">Your next move.<br />A clearer <span>match.</span></h1>
-              <p className="tm-hero-description">You bring the experience. We help connect the dots. See how your resume fits a role, discover your strengths, and know where to focus next.</p>
+              <p className="tm-hero-description">Find open roles that match your experience. Pick a posting to check your skills and prepare a résumé, cover letter, and answers for that application.</p>
               <div className="tm-hero-actions">
                 <Link className="tm-button tm-button-primary" to="/signup">Find my match <FiArrowUpRight aria-hidden="true" /></Link>
                 <a className="tm-button tm-button-text" href="#how-it-works">See how it works <FiArrowDown aria-hidden="true" /></a>

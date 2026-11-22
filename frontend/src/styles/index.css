@@ -25,10 +25,7 @@ html.dark ::selection { color: #fff; background: #454545; }
 .dark .tm-password-reset input { background: var(--tm-dark-inset); }
 .dark .tm-password-reset input:-webkit-autofill { -webkit-text-fill-color: #d4d4d4; -webkit-box-shadow: 0 0 0 100px var(--tm-dark-inset) inset; caret-color: #d4d4d4; }
 .dark .tm-password-reset input:focus-visible,
-.dark .tm-password-reset button:focus-visible,
-.dark .tm-dashboard input:focus-visible,
-.dark .tm-dashboard a:focus-visible,
-.dark .tm-dashboard button:focus-visible { outline: 2px solid var(--tm-dark-accent); outline-offset: 4px; }
+.dark .tm-password-reset button:focus-visible { outline: 2px solid var(--tm-dark-accent); outline-offset: 4px; }
 
 @keyframes shimmer {
   0% {

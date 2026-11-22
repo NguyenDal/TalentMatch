@@ -13,7 +13,8 @@ A web app to check how well your resume matches a job description, see detailed 
 - See which role-specific skills your resume demonstrates and which need more evidence
 - Review location, work arrangements, and eligibility in separate job notes
 - Get smart, tailored Q&A for your application
-- User-friendly, modern interface with profile + trends
+- Find published roles from Affirm, D2L, and Mozilla through their public Greenhouse boards. Search titles and locations, or upload a résumé to rank roles by shared terms. Open the employer posting to apply.
+- Select a posting once and use it in Check job fit, the Jake’s Résumé builder, the cover-letter builder, or an individual application question. Inputs and draft edits stay in memory in the signed-in tab and clear on refresh or sign-out.
 
 ---
 
@@ -95,6 +96,9 @@ and generate up to three short application Q&A items. The score is the share of
 those skills supported by resume evidence. Explicit conditions such as onsite
 days, work authorization, or a degree belong in the notes. A posting with only
 such conditions can return notes without a percentage.
+Each writing tool uses one model request per generated draft and shares the fit
+check's authenticated usage budget. Job search reads public Greenhouse feeds
+and ranks openings locally without a model request or a Greenhouse API key.
 GPT-6 Luna runs with `reasoning_effort=none`; output is capped at 4,096, 4,096,
 and 2,048 tokens respectively. These are ceilings, not fixed token charges.
 Prompts request concise explanations and avoid duplicate requirements. Profile

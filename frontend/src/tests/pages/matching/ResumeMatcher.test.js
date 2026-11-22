@@ -1,8 +1,11 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render as renderComponent, screen, waitFor, within } from "@testing-library/react";
 import axios from "axios";
 import ResumeMatcher from "../../../pages/matching/ResumeMatcher";
 import { BASE_URL } from "../../../services/api";
+import { ApplicationMaterialsProvider } from "../../../contexts/ApplicationMaterials";
+
+const render = component => renderComponent(component, { wrapper: ApplicationMaterialsProvider });
 
 jest.mock("axios", () => ({ post: jest.fn() }));
 

@@ -1,13 +1,16 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import axios from "axios";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { FiArrowUpRight, FiGrid, FiLayers, FiLogOut, FiSettings, FiTarget } from "react-icons/fi";
+import { FiArrowUpRight, FiSearch, FiLayers, FiLogOut, FiSettings, FiTarget, FiFileText, FiMail, FiMessageCircle } from "react-icons/fi";
+import { workspaceTools } from "../../app/workspaceRoutes";
 import { useAuth } from "../../contexts/AuthContext";
 import { BASE_URL } from "../../services/api";
 import ThemeToggle from "../theme/ThemeToggle";
 import "./NavBar.css";
 
-export default function NavBar({ setMenu }) {
+const icons = { "/jobs": FiSearch, "/job-fit": FiTarget, "/resume-builder": FiFileText, "/cover-letter": FiMail, "/application-questions": FiMessageCircle };
+
+export default function NavBar() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -68,11 +71,6 @@ export default function NavBar({ setMenu }) {
     };
   }, [menuOpen]);
 
-  const choosePage = (page) => {
-    setMenu?.(page);
-    setMenuOpen(false);
-  };
-
   const moveMenuFocus = (event) => {
     const items = Array.from(profileMenu.current.querySelectorAll('[role="menuitem"]'));
     const index = items.indexOf(document.activeElement);
@@ -90,18 +88,16 @@ export default function NavBar({ setMenu }) {
   return (
     <header className="tm-app-nav">
       <div className="tm-app-nav-inner">
-        <Link to="/" className="tm-app-brand" aria-label="TalentMatch home" onClick={() => choosePage("matcher")}>
+        <Link to="/jobs" className="tm-app-brand" aria-label="TalentMatch home">
           <span className="tm-app-brand-mark" aria-hidden="true"><FiLayers /></span>
           <span>TalentMatch<span className="tm-app-brand-dot">.</span></span>
         </Link>
 
         <nav className="tm-app-links" aria-label="Workspace navigation">
-          <NavLink to="/" end className="tm-app-link" onClick={() => choosePage("matcher")}>
-            <FiTarget aria-hidden="true" /> <span>Job matching</span>
-          </NavLink>
-          <NavLink to="/dashboard" className="tm-app-link" onClick={() => choosePage("dashboard")}>
-            <FiGrid aria-hidden="true" /> <span>Dashboard</span>
-          </NavLink>
+          {workspaceTools.map(({ path, label }) => {
+            const Icon = icons[path];
+            return <NavLink key={path} to={path} end className="tm-app-link"><Icon aria-hidden="true" /><span>{label}</span></NavLink>;
+          })}
         </nav>
 
         <div className="tm-app-nav-actions">
@@ -128,10 +124,7 @@ export default function NavBar({ setMenu }) {
               <div className="tm-app-profile-heading" role="presentation">
                 <span>Your workspace</span><strong>{username}</strong>
               </div>
-              <Link to="/dashboard" role="menuitem" className="tm-app-menu-item" onClick={() => choosePage("dashboard")}>
-                <FiGrid aria-hidden="true" /><span>Dashboard</span><FiArrowUpRight aria-hidden="true" />
-              </Link>
-              <Link to="/dashboard/settings" role="menuitem" className="tm-app-menu-item" onClick={() => choosePage("dashboard")}>
+              <Link to="/dashboard/settings" role="menuitem" className="tm-app-menu-item" onClick={() => setMenuOpen(false)}>
                 <FiSettings aria-hidden="true" /><span>Account settings</span><FiArrowUpRight aria-hidden="true" />
               </Link>
               <div className="tm-app-menu-divider" role="separator" />

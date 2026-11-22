@@ -59,7 +59,8 @@ class WebRuntimeTests(unittest.TestCase):
         self.directory.cleanup()
 
     def test_spa_routes_refresh_without_intercepting_api_errors(self):
-        for route in ("/", "/login", "/signup", "/contact", "/dashboard/settings/security", "/reset-password?token=example"):
+        for route in ("/", "/login", "/signup", "/contact", "/dashboard/settings/security", "/reset-password?token=example",
+                      "/resume-builder", "/cover-letter", "/application-questions", "/jobs", "/job-fit"):
             with self.subTest(route=route):
                 response = self.client.get(route)
                 self.assertEqual(response.status_code, 200)
@@ -107,6 +108,15 @@ class WebRuntimeTests(unittest.TestCase):
             self.assertIn("profile picture", response.json()["detail"])
             self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertEqual(self.client.post("/upload-profile-image/", content=b"small").status_code, 200)
+
+    def test_generated_documents_use_bounded_multipart_uploads(self):
+        for route in ("/application-tools/resume/", "/application-tools/cover-letter/", "/application-tools/question/", "/job-search/"):
+            with self.subTest(route=route):
+                response = self.client.post(route, content=b"small", headers={"content-length": str(MAX_UPLOAD_BODY + 1)})
+                self.assertEqual(response.status_code, 413)
+                self.assertEqual(response.headers["cache-control"], "no-store")
+        chunks = iter([b"x" * MAX_UPLOAD_BODY, b"overflow"])
+        self.assertEqual(self.client.post("/application-tools/resume/", content=chunks).status_code, 413)
 
     def test_sensitive_responses_are_not_cached(self):
         responses = (

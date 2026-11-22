@@ -65,12 +65,12 @@
   .tm-app-link { padding-left: 12px; padding-right: 12px; }
   .tm-app-profile-identity:hover .tm-app-profile-name, .tm-app-profile-identity:focus-within .tm-app-profile-name, .tm-app-profile-identity.is-open .tm-app-profile-name { max-width: 90px; }
 }
-@media (max-width: 760px) {
+@media (max-width: 1060px) {
   .tm-app-nav-inner { flex-wrap: wrap; min-height: 116px; padding: 16px 20px 10px; gap: 12px; }
   .tm-app-brand { font-size: 21px; }
   .tm-app-brand-mark { width: 33px; height: 33px; font-size: 20px; }
-  .tm-app-links { order: 3; width: 100%; justify-content: center; gap: 8px; }
-  .tm-app-link { justify-content: center; flex: 1; max-width: 210px; padding: 10px 12px; }
+  .tm-app-links { order: 3; width: 100%; justify-content: flex-start; gap: 5px; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--tm-app-border) transparent; padding: 4px 0; }
+  .tm-app-link { justify-content: center; flex: 1 0 auto; padding: 10px 12px; }
   .tm-app-nav-actions { gap: 9px; }
   .tm-app-profile-identity { padding: 0; }
   .tm-app-profile-name { display: none; }
@@ -79,6 +79,11 @@
 @media (max-width: 359px) {
   .tm-app-nav-inner { padding-left: 16px; padding-right: 16px; gap: 10px; }
   .tm-app-brand { font-size: 19px; gap: 8px; }
+}
+@media (max-width: 560px) {
+  .tm-app-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; overflow: visible; }
+  .tm-app-link { min-height: 39px; justify-content: flex-start; gap: 6px; padding: 6px; font-size: 11px; white-space: normal; }
+  .tm-app-link > svg { flex-shrink: 0; width: 14px; height: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tm-app-link, .tm-app-profile-identity, .tm-app-profile-name { transition: none; }

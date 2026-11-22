@@ -10,9 +10,13 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.middleware.gzip import GZipMiddleware
 
 MAX_UPLOAD_BODY = 6 * 1024 * 1024
-PUBLIC_ROUTES = {"", "login", "signup", "contact", "request-password-reset", "reset-password", "dashboard"}
+PUBLIC_ROUTES = {
+    "", "login", "signup", "contact", "request-password-reset", "reset-password", "dashboard",
+    "resume-builder", "cover-letter", "application-questions", "jobs", "job-fit",
+}
 UPLOAD_ERROR_DETAILS = {
     "/upload-resume": "This upload is too large. Choose a resume under 5 MB and a shorter job description.",
+    "/job-search": "This upload is too large. Choose a resume under 5 MB.",
     "/upload-profile-image": "This upload is too large. Choose a profile picture under 5 MB.",
 }
 
@@ -58,7 +62,10 @@ class UploadBodyLimitMiddleware:
 
     async def __call__(self, scope, receive, send):
         path = scope.get("path", "").rstrip("/")
-        if scope["type"] != "http" or path not in UPLOAD_ERROR_DETAILS:
+        detail = UPLOAD_ERROR_DETAILS.get(path)
+        if path.startswith("/application-tools/"):
+            detail = UPLOAD_ERROR_DETAILS["/upload-resume"]
+        if scope["type"] != "http" or detail is None:
             await self.app(scope, receive, send)
             return
         if scope["method"] != "POST":
@@ -70,7 +77,7 @@ class UploadBodyLimitMiddleware:
         except ValueError:
             declared = self.max_bytes + 1
         if declared > self.max_bytes:
-            await self.reject(scope, receive, send, UPLOAD_ERROR_DETAILS[path])
+            await self.reject(scope, receive, send, detail)
             return
         chunks, size = [], 0
         while True:
@@ -80,7 +87,7 @@ class UploadBodyLimitMiddleware:
             body = message.get("body", b"")
             size += len(body)
             if size > self.max_bytes:
-                await self.reject(scope, receive, send, UPLOAD_ERROR_DETAILS[path])
+                await self.reject(scope, receive, send, detail)
                 return
             chunks.append(body)
             if not message.get("more_body", False):

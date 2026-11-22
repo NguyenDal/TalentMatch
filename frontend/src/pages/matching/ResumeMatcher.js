@@ -1,7 +1,8 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { FiAlertCircle, FiArrowRight, FiArrowUpRight, FiBriefcase, FiCheck, FiCheckCircle, FiChevronDown, FiClipboard, FiFileText, FiLoader, FiMessageSquare, FiPlus, FiTarget, FiUploadCloud, FiX } from "react-icons/fi";
 import { BASE_URL, getAuthHeaders } from "../../services/api";
+import { useApplicationMaterials } from "../../contexts/ApplicationMaterials";
 import "./ResumeMatcher.css";
 
 const fileSize = (bytes) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -33,16 +34,15 @@ function matchResultError(data) {
 
 export default function ResumeMatcher() {
   const fileInput = useRef(null);
-  const [resumeFile, setResumeFile] = useState(null);
-  const [jobDesc, setJobDesc] = useState("");
-  const [rawResult, setResult] = useState(null);
+  const { resumeFile, setResumeFile, jobDesc, setJobDesc, toolDrafts, setToolDrafts } = useApplicationMaterials();
+  const { result: rawResult, userMet = [], userMissing = [] } = toolDrafts.match || {};
+  const request = useRef(null);
+  useEffect(() => () => request.current?.abort(), []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [fileError, setFileError] = useState("");
   const [dragging, setDragging] = useState(false);
   const [expandedReq, setExpandedReq] = useState(null);
-  const [userMet, setUserMet] = useState([]);
-  const [userMissing, setUserMissing] = useState([]);
   // Also validate results already in state after a frontend update.
   const resultError = rawResult ? matchResultError(rawResult) : "";
   const result = resultError ? null : rawResult;
@@ -60,10 +60,8 @@ export default function ResumeMatcher() {
   const wordCount = jobDesc.trim() ? jobDesc.trim().split(/\s+/).length : 0;
 
   const clearResult = () => {
-    setResult(null);
+    setToolDrafts(drafts => ({ ...drafts, match: undefined }));
     setError("");
-    setUserMet([]);
-    setUserMissing([]);
     setExpandedReq(null);
   };
 
@@ -103,20 +101,24 @@ export default function ResumeMatcher() {
     setLoading(true);
     clearResult();
     const formData = new FormData();
+    const controller = new AbortController();
+    request.current = controller;
     formData.append("resume", resumeFile);
     formData.append("job_description", jobDesc);
     try {
       const { data } = await axios.post(`${BASE_URL}/upload-resume/`, formData, {
-        headers: { ...getAuthHeaders(), "Content-Type": "multipart/form-data" },
+        headers: { ...getAuthHeaders(), "Content-Type": "multipart/form-data" }, signal: controller.signal,
       });
+      if (controller.signal.aborted) return;
       const responseError = matchResultError(data);
       if (responseError) setError(responseError);
-      else setResult(data);
+      else setToolDrafts(drafts => ({ ...drafts, match: { result: data } }));
     } catch (err) {
+      if (controller.signal.aborted) return;
       const detail = err.response?.data?.detail;
       setError(typeof detail === "string" ? detail : "We couldn’t complete this match. Please try again in a moment.");
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 
@@ -134,13 +136,11 @@ export default function ResumeMatcher() {
         <span className="tm-workspace-detail-label">Does this reflect your experience?</span>
         <div className="tm-workspace-requirement-actions">
           <button type="button" onClick={() => {
-            setUserMet(prev => [...new Set([...prev, req])]);
-            setUserMissing(prev => prev.filter(item => item !== req));
+            setToolDrafts(drafts => ({ ...drafts, match: { ...drafts.match, userMet: [...new Set([...userMet, req])], userMissing: userMissing.filter(item => item !== req) } }));
             setExpandedReq(null);
           }}><FiCheck aria-hidden="true" /> Yes, I meet this</button>
           <button type="button" onClick={() => {
-            setUserMissing(prev => [...new Set([...prev, req])]);
-            setUserMet(prev => prev.filter(item => item !== req));
+            setToolDrafts(drafts => ({ ...drafts, match: { ...drafts.match, userMissing: [...new Set([...userMissing, req])], userMet: userMet.filter(item => item !== req) } }));
             setExpandedReq(null);
           }}>Not yet</button>
         </div>
@@ -152,9 +152,8 @@ export default function ResumeMatcher() {
     <div className="tm-workspace-container">
       <header className="tm-workspace-heading">
         <div>
-          <p className="tm-workspace-eyebrow"><span /> YOUR NEXT MOVE STARTS HERE</p>
-          <h1>Find where you <span>fit.</span></h1>
-          <p className="tm-workspace-description">Your experience. A new opportunity. Let’s see how they connect.</p>
+          <h1>Check your <span>job fit.</span></h1>
+          <p className="tm-workspace-description">Compare your résumé with one posting to see which skills you can demonstrate.</p>
         </div>
         <div className="tm-workspace-heading-note"><FiTarget aria-hidden="true" /><span>A little clarity.<br /><strong>A more confident next step.</strong></span></div>
       </header>

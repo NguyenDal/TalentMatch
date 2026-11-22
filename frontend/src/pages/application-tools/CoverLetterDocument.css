@@ -1,0 +1,49 @@
+/* DejaVu Serif carries the source letter's proportions through to print.
+   Font license: public/licenses/DejaVu.txt. The files load when the letter is displayed. */
+@font-face {
+  font-family: "TalentMatch Letter Serif"; font-weight: 400; font-style: normal; font-display: swap;
+  src: url("../../assets/fonts/dejavu/DejaVuSerif.woff") format("woff");
+}
+@font-face {
+  font-family: "TalentMatch Letter Serif"; font-weight: 700; font-style: normal; font-display: swap;
+  src: url("../../assets/fonts/dejavu/DejaVuSerif-Bold.woff") format("woff");
+}
+.tm-cldoc-status { font-size: .8rem; color: var(--rd-muted); }
+.tm-cldoc-paper {
+  box-sizing: border-box; width: 100%; max-width: 8.5in; margin: 0 auto;
+  padding: clamp(16px, 6%, 44pt) clamp(18px, 8%, 60pt) clamp(18px, 7%, 48pt);
+  background: #fff; color: #151515; color-scheme: light; text-align: left; overflow-wrap: anywhere;
+  font: 10.8pt/14.4pt "TalentMatch Letter Serif", "DejaVu Serif", Georgia, serif;
+}
+.tm-rdoc-sheet .tm-cldoc-paper { min-height: min(11in, 92vw); box-shadow: 0 1px 8px #0002; }
+.tm-cldoc-paper :is(h2, p, ul, li, header, footer) { margin: 0; padding: 0; }
+.tm-cldoc-paper header { text-align: center; border-bottom: .55pt solid #5d5d5d; padding-bottom: 12.5pt; margin-bottom: 18pt; }
+.tm-cldoc-paper h2 { font: inherit; font-size: 23pt; line-height: 28pt; font-weight: 400; letter-spacing: normal; color: inherit; }
+.tm-cldoc-paper h2 + .tm-cldoc-contact { margin-top: 4pt; }
+.tm-cldoc-paper .tm-cldoc-contact { display: flex; flex-wrap: wrap; justify-content: center; list-style: none; font-size: 9pt; line-height: 12.5pt; }
+.tm-cldoc-contact li { max-width: 100%; }
+.tm-cldoc-contact li + li::before { content: "|"; padding: 0 3pt; }
+.tm-cldoc-paper a { color: inherit; text-decoration: none; }
+.tm-cldoc-paper .tm-cldoc-date, .tm-cldoc-paper .tm-cldoc-recipient, .tm-cldoc-paper .tm-cldoc-subject { margin-bottom: 11pt; }
+.tm-cldoc-paper .tm-cldoc-subject { font-weight: 700; font-size: 11pt; }
+.tm-cldoc-paper .tm-cldoc-salutation, .tm-cldoc-paper .tm-cldoc-paragraph + .tm-cldoc-paragraph,
+.tm-cldoc-paper footer p + p { margin-top: 9pt; }
+.tm-cldoc-paper .tm-cldoc-salutation { margin-bottom: 9pt; }
+.tm-cldoc-paper footer { margin-top: 11pt; }
+.tm-cldoc-print { display: none; }
+@media screen and (max-width: 600px) {
+  .tm-cldoc-paper { padding: 20px 14px; }
+}
+@page tm-letter { size: letter; margin: 44pt 60pt 48pt; }
+@media print {
+  html:has(.tm-cldoc-print), body:has(> .tm-cldoc-print) {
+    display: block !important; height: auto !important; margin: 0 !important; padding: 0 !important;
+    background: #fff !important; overflow: visible !important;
+  }
+  body:has(> .tm-cldoc-print) > :not(.tm-cldoc-print) { display: none !important; }
+  body > .tm-cldoc-print { display: block; page: tm-letter; }
+  .tm-cldoc-print .tm-cldoc-paper { max-width: none; padding: 0; margin: 0; }
+  .tm-cldoc-paper :is(header, .tm-cldoc-date, .tm-cldoc-recipient, .tm-cldoc-subject, .tm-cldoc-salutation) { break-after: avoid; }
+  .tm-cldoc-paper footer { break-inside: avoid; }
+  .tm-cldoc-paper p { orphans: 2; widows: 2; }
+}

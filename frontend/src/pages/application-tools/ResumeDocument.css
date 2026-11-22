@@ -1,0 +1,102 @@
+.tm-rdoc {
+  --rd-border: var(--tm-app-border, #ddd9e4);
+  --rd-paper-surround: var(--tm-app-bg, #f5f4f1);
+  --rd-surface: var(--tm-app-surface, #fff);
+  --rd-text: var(--tm-app-ink, #252438);
+  --rd-muted: var(--tm-app-muted, #665f73);
+  --rd-accent: var(--tm-app-accent, #6850c8);
+  color: var(--rd-text);
+}
+.dark .tm-rdoc {
+  --rd-border: var(--tm-dark-border);
+  --rd-paper-surround: var(--tm-dark-inset);
+  --rd-surface: var(--tm-dark-surface);
+  --rd-text: var(--tm-dark-ink);
+  --rd-muted: var(--tm-dark-muted);
+  --rd-accent: var(--tm-dark-accent);
+}
+.tm-rdoc-toolbar, .tm-rdoc-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.tm-rdoc-toolbar { justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+.tm-rdoc-toolbar > a { color: var(--rd-muted); font-size: .85rem; text-decoration: underline; text-underline-offset: 3px; }
+.tm-rdoc button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 38px; padding: 7px 12px; border: 1px solid var(--rd-border); border-radius: 7px;
+  color: var(--rd-text); background: var(--rd-surface); font: inherit; font-size: .85rem;
+  font-weight: 600; cursor: pointer;
+}
+.tm-rdoc button:hover { border-color: var(--rd-accent); }
+.tm-rdoc .tm-rdoc-primary { color: white; background: #684bc6; border-color: #684bc6; }
+.tm-rdoc .tm-rdoc-primary:hover { background: #573ba9; }
+.tm-rdoc :is(a, button, input, textarea):focus-visible { outline: 2px solid var(--rd-accent); outline-offset: 2px; }
+.tm-rdoc-sheet { padding: clamp(8px, 2.5vw, 32px); border: 1px solid var(--rd-border); border-radius: 10px; background: var(--rd-paper-surround); }
+.tm-rdoc-paper {
+  box-sizing: border-box; width: 100%; max-width: 8.5in; margin: 0 auto; padding: clamp(20px, 5.8%, .58in);
+  background: white; color: #111; color-scheme: light;
+  font: 11pt/1.22 "Times New Roman", Times, serif; overflow-wrap: anywhere; text-align: left;
+}
+.tm-rdoc-sheet .tm-rdoc-paper { min-height: min(11in, 92vw); box-shadow: 0 1px 8px #0002; }
+.tm-rdoc-paper :is(h2, h3, p, ul, li) { margin: 0; }
+.tm-rdoc-paper .tm-rdoc-paper-header { text-align: center; margin-bottom: 13pt; }
+.tm-rdoc-paper h2 { color: #111; font: bold small-caps 28pt/1.1 "Times New Roman", Times, serif; letter-spacing: -.3pt; }
+.tm-rdoc-paper .tm-rdoc-contacts {
+  padding: 0; list-style: none; display: flex; flex-wrap: wrap; justify-content: center;
+  align-items: baseline; gap: 1pt 0; margin-top: 3pt; font-size: 9.7pt;
+}
+.tm-rdoc-contacts li { max-width: 100%; }
+.tm-rdoc-contacts li + li::before { content: "|"; padding: 0 5pt; }
+.tm-rdoc-paper a { color: inherit; text-decoration: underline; text-underline-offset: 1.2pt; }
+.tm-rdoc-paper .tm-rdoc-section { margin: 8pt 0 0; }
+.tm-rdoc-paper h3 {
+  font: small-caps 14pt/1.15 "Times New Roman", Times, serif; color: #111; letter-spacing: .15pt;
+  margin-bottom: 4pt; padding-bottom: 1pt; border-bottom: .6pt solid #333;
+}
+.tm-rdoc-entry, .tm-rdoc-paper .tm-rdoc-skills { margin: 0 0 4pt .11in; }
+.tm-rdoc-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10pt; }
+.tm-rdoc-row > span:first-child { font-weight: 700; }
+.tm-rdoc-row > span:last-child { text-align: right; }
+.tm-rdoc-row :is(i, em) { font-weight: 400; }
+.tm-rdoc-secondary { font-size: 10.2pt; font-style: italic; }
+.tm-rdoc-secondary > span:first-child { font-weight: 400; }
+.tm-rdoc-entry ul { list-style: disc outside; padding-left: 16pt; margin-top: 2pt; font-size: 10.25pt; }
+.tm-rdoc-entry li + li { margin-top: 1.2pt; }
+.tm-rdoc-paper .tm-rdoc-skills { font-size: 10.4pt; margin-bottom: 2pt; }
+.tm-rdoc-print { display: none; }
+.tm-rdoc-editor { display: grid; gap: 22px; }
+.tm-rdoc-editor fieldset { min-width: 0; }
+.tm-rdoc-group { border: 1px solid var(--rd-border); border-radius: 8px; padding: 12px 16px 16px; }
+.tm-rdoc-group > legend { padding: 0 5px; font-weight: 650; }
+.tm-rdoc-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border: 0; margin: 0 0 12px; padding: 0 0 12px; border-bottom: 1px solid var(--rd-border); }
+.tm-rdoc-field { display: grid; align-content: start; gap: 5px; min-width: 0; color: var(--rd-text); font-size: .83rem; }
+.tm-rdoc-group > .tm-rdoc-field + .tm-rdoc-field { margin-top: 10px; }
+.tm-rdoc-field > span { font-weight: 600; }
+.tm-rdoc-field small { margin-left: 8px; font-size: .75rem; color: var(--rd-muted); font-weight: 400; }
+.tm-rdoc-field :is(input, textarea) {
+  width: 100%; box-sizing: border-box; min-height: 38px; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--rd-border);
+  background: var(--rd-paper-surround); color: var(--rd-text); font: inherit; line-height: 1.5;
+}
+.tm-rdoc-field textarea { resize: vertical; }
+.tm-rdoc-long-field { grid-column: 1 / -1; }
+.tm-rdoc .tm-rdoc-remove { justify-self: start; font-size: .78rem; }
+.tm-rdoc .tm-rdoc-add { color: var(--rd-accent); }
+.tm-rdoc-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media screen and (max-width: 600px) {
+  .tm-rdoc-fields { grid-template-columns: 1fr; }
+  .tm-rdoc-toolbar { align-items: flex-start; }
+  .tm-rdoc-paper h2 { font-size: 23pt; }
+  .tm-rdoc-sheet { padding: 5px; }
+  .tm-rdoc-paper { padding: 16px 12px; }
+  .tm-rdoc-row { gap: 4pt; flex-wrap: wrap; }
+}
+@page tm-resume { size: letter; margin: .5in .58in; }
+@media print {
+  html:has(.tm-rdoc-print), body:has(> .tm-rdoc-print) {
+    display: block !important; height: auto !important; margin: 0 !important; padding: 0 !important;
+    background: white !important; overflow: visible !important;
+  }
+  body:has(> .tm-rdoc-print) > :not(.tm-rdoc-print) { display: none !important; }
+  body > .tm-rdoc-print { display: block; page: tm-resume; }
+  .tm-rdoc-print .tm-rdoc-paper { max-width: none; min-height: 0; padding: 0; margin: 0; box-shadow: none; }
+  .tm-rdoc-print :is(h2, h3, .tm-rdoc-entry-heading) { break-after: avoid; }
+  .tm-rdoc-print :is(.tm-rdoc-paper-header, .tm-rdoc-row, .tm-rdoc-entry-heading, li) { break-inside: avoid; }
+  .tm-rdoc-print p, .tm-rdoc-print li { orphans: 2; widows: 2; }
+}

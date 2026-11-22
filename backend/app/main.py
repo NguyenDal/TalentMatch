@@ -4,8 +4,6 @@ load_dotenv()  # Load secrets from .env for devs
 from fastapi import BackgroundTasks
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-import PyPDF2
-from docx import Document
 import openai
 import os
 import re
@@ -16,9 +14,14 @@ from app.infrastructure.avatars import validated_avatar_extension
 from uuid import uuid4
 import httpx
 from app.infrastructure.web_runtime import configure_web_runtime
-from app.matching.limits import (match_limiter, trends_limiter, MAX_RESUME_BYTES, MAX_RESUME_CHARACTERS,
-    MAX_JOB_CHARACTERS, MAX_PDF_PAGES, MAX_PROFILE_PROFESSION_CHARACTERS, MAX_PROFILE_BIO_CHARACTERS)
-from app.matching.document_limits import validate_docx_size
+from app.matching.limits import (match_limiter, trends_limiter, MAX_JOB_CHARACTERS,
+    MAX_PROFILE_PROFESSION_CHARACTERS, MAX_PROFILE_BIO_CHARACTERS)
+from app.matching.documents import read_resume
+from app.matching.job_search import router as job_search_router
+from app.matching.application_drafts import (
+    ApplicationTool, BASE_PROMPT, MAX_QUESTION_CHARACTERS, OUTPUT_TOKENS, TOOL_PROMPTS,
+    COVER_LETTER_RESPONSE_FORMAT, WRITTEN_RESPONSE_FORMAT, validated_draft,
+)
 from app.matching.posting import JOB_CONDITION, ROUTINE_SKILL, source_statement
 from app.matching.profile_trends_cache import profile_trends_cache
 
@@ -37,7 +40,7 @@ from app.infrastructure.database import get_db
 # === JWT Handling ===
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from jose import JWTError, jwt
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import secrets
 
 # === Email Imports for password reset ===
@@ -170,47 +173,6 @@ def analysis_http_error(error):
     if isinstance(error, openai.APIStatusError):
         return HTTPException(status_code=502, detail="The analysis service could not complete this match. Please try again in a moment.")
     return HTTPException(status_code=500, detail="We couldn’t complete this match. Please try again or contact the site owner.")
-
-def extract_text_from_pdf(file):
-    """Extract all text from a PDF file (each page)."""
-    pdf_reader = PyPDF2.PdfReader(file)
-    if len(pdf_reader.pages) > MAX_PDF_PAGES:
-        raise HTTPException(413, "Please choose a resume with 25 pages or fewer.")
-    chunks, size = [], 0
-    for page in pdf_reader.pages:
-        text = page.extract_text() or ''
-        size += len(text) + (1 if chunks else 0)
-        if size > MAX_RESUME_CHARACTERS:
-            raise HTTPException(413, "Please use a resume with 40,000 characters or fewer.")
-        chunks.append(text)
-    return "\n".join(chunks)
-
-def extract_text_from_docx(file):
-    """Extract all text from a Word (.docx) file."""
-    validate_docx_size(file)
-    document = Document(file)
-    chunks, size = [], 0
-    for paragraph in document.paragraphs:
-        text = paragraph.text
-        size += len(text) + (1 if chunks else 0)
-        if size > MAX_RESUME_CHARACTERS:
-            raise HTTPException(413, "Please use a resume with 40,000 characters or fewer.")
-        chunks.append(text)
-    return '\n'.join(chunks)
-
-def extract_text(file: UploadFile):
-    """
-    Extract text from uploaded file.
-    Supports: PDF (.pdf), Word (.docx), and plain text (.txt).
-    """
-    filename = (file.filename or "").lower()
-    if filename.endswith('.pdf'):
-        return extract_text_from_pdf(file.file)
-    elif filename.endswith('.docx'):
-        return extract_text_from_docx(file.file)
-    elif filename.endswith('.txt'):
-        return file.file.read().decode("utf-8-sig")
-    raise HTTPException(status_code=422, detail="Please upload a PDF, DOCX, or TXT resume.")
 
 def clean_explanation(text):
     """Make AI explanations more readable for users."""
@@ -438,6 +400,7 @@ class LogoutSessionRequest(BaseModel):
 
 app = FastAPI()
 app.include_router(google_auth_router)
+app.include_router(job_search_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[frontend_origin()],
@@ -453,38 +416,69 @@ def require_match_slot(current_user: User = Depends(get_current_user)):
         yield current_user
 
 
+def application_sources(resume: UploadFile, job_description: str):
+    """Validate and extract the same source material for matching and writing."""
+    job_text = job_description.strip()
+    if not job_text:
+        raise HTTPException(status_code=422, detail="Please paste a job description.")
+    if len(job_text) > MAX_JOB_CHARACTERS:
+        raise HTTPException(status_code=413, detail="Please shorten the job description to 30,000 characters or fewer.")
+    resume_text = read_resume(resume)
+    if client is None:
+        raise HTTPException(status_code=503, detail="The analysis service is not configured yet. Please contact the site owner.")
+    return resume_text, job_text
+
+
+@app.post("/application-tools/{tool}/")
+def create_application_draft(
+    tool: ApplicationTool,
+    resume: UploadFile = File(...),
+    job_description: str = Form(...),
+    question: str = Form(""),
+    letter_date: date | None = Form(None),
+    current_user: User = Depends(require_match_slot),
+):
+    """Draft one application document or answer, using the shared AI usage budget."""
+    question = question.strip()
+    if tool == "question":
+        if not question:
+            raise HTTPException(422, "Enter the application question you want to answer.")
+        if len(question) > MAX_QUESTION_CHARACTERS:
+            raise HTTPException(413, "Shorten the application question to 2,000 characters or fewer.")
+    resume_text, job_text = application_sources(resume, job_description)
+    sources = {"resume": resume_text, "job_posting": job_text}
+    if tool == "question":
+        sources["question"] = question
+    options = completion_options(temperature=0.2, token_limit=OUTPUT_TOKENS[tool])
+    if tool == "cover-letter":
+        options["response_format"] = COVER_LETTER_RESPONSE_FORMAT
+    elif tool == "question":
+        options["response_format"] = WRITTEN_RESPONSE_FORMAT
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": BASE_PROMPT + "\n" + TOOL_PROMPTS[tool]},
+                {"role": "user", "content": json.dumps(sources, ensure_ascii=False)},
+            ],
+            **options,
+        )
+        return validated_draft(tool, analysis_json(response), resume_text, job_text, letter_date)
+    except ValueError as exc:
+        # Do not expose provider output or candidate information from validation errors.
+        raise HTTPException(502, "The writing service returned an incomplete draft. Please try again.") from exc
+    except Exception as exc:
+        raise analysis_http_error(exc) from exc
+
+
 @app.post("/upload-resume/")
 def upload_resume(
     resume: UploadFile = File(...),
     job_description: str = Form(...),
     current_user: User = Depends(require_match_slot),
 ):
-    """
-    Receive user's resume file and job description,
-    extract requirements and match using AI, return match data.
-    """
-    job_text = job_description.strip()
-    if not job_text:
-        raise HTTPException(status_code=422, detail="Please paste a job description before checking your match.")
-    if len(job_text) > MAX_JOB_CHARACTERS:
-        raise HTTPException(status_code=413, detail="Please shorten the job description to 30,000 characters or fewer.")
-    resume.file.seek(0, 2)
-    resume_size = resume.file.tell()
-    resume.file.seek(0)
-    if resume_size > MAX_RESUME_BYTES:
-        raise HTTPException(status_code=413, detail="Please choose a resume under 5 MB.")
-    try:
-        resume_text = extract_text(resume).strip()
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail="We couldn’t read this resume. Please upload a readable, unencrypted PDF, DOCX, or UTF-8 TXT file.") from exc
-    if not resume_text:
-        raise HTTPException(status_code=422, detail="No readable text was found in this resume. For a scanned PDF, use a text-based version instead.")
-    if len(resume_text) > MAX_RESUME_CHARACTERS:
-        raise HTTPException(status_code=413, detail="Please use a resume with 40,000 characters or fewer.")
-    if client is None:
-        raise HTTPException(status_code=503, detail="The matching service is not configured yet. Please contact the site owner.")
+    """Compare a resume with the skills in a job posting."""
+    resume_text, job_text = application_sources(resume, job_description)
 
     try:
         requirements, job_notes = extract_job_posting(job_text)

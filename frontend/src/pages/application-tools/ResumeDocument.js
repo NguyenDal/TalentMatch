@@ -129,17 +129,14 @@ export default function ResumeDocument({ resume, onChange }) {
   const setCurrent = onChange || setLocal;
 
   return <div className="tm-rdoc">
-    <div className="tm-rdoc-toolbar">
-      <a href="https://www.overleaf.com/latex/templates/jakes-resume/syzfjbzwjncs" target="_blank" rel="noreferrer">Jake’s Résumé template</a>
-      <div className="tm-rdoc-actions">
-        {beforeEditing ? <>
-          <button type="button" onClick={() => { setCurrent(beforeEditing); setBeforeEditing(null); }}>Cancel edits</button>
-          <button type="button" className="tm-rdoc-primary" onClick={() => setBeforeEditing(null)}>Done editing</button>
-        </> : <>
-          <button type="button" onClick={() => setBeforeEditing(current)}><FiEdit2 aria-hidden="true" /> Edit résumé</button>
-          <button type="button" className="tm-rdoc-primary" onClick={() => window.print()}><FiPrinter aria-hidden="true" /> Print / Save PDF</button>
-        </>}
-      </div>
+    <div className="tm-rdoc-actions tm-rdoc-resume-actions" role="group" aria-label="Résumé actions">
+      {beforeEditing ? <>
+        <button type="button" onClick={() => { setCurrent(beforeEditing); setBeforeEditing(null); }}>Cancel edits</button>
+        <button type="button" className="tm-rdoc-primary" onClick={() => setBeforeEditing(null)}>Done editing</button>
+      </> : <>
+        <button type="button" onClick={() => setBeforeEditing(current)}><FiEdit2 aria-hidden="true" /> Edit résumé</button>
+        <button type="button" className="tm-rdoc-primary" onClick={() => window.print()}><FiPrinter aria-hidden="true" /> Print / Save PDF</button>
+      </>}
     </div>
     {beforeEditing ? <ResumeEditor draft={current} setDraft={setCurrent} /> : <div className="tm-rdoc-sheet"><ResumePaper resume={current} /></div>}
     {createPortal(<div className="tm-rdoc-print"><ResumePaper resume={current} /></div>, document.body)}

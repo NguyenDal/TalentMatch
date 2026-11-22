@@ -10,16 +10,19 @@ import "./ApplicationToolPage.css";
 const tools = {
   resume: {
     title: "Resume builder", icon: FiFileText, action: "Build resume", result: "Resume preview",
+    draftName: "résumé",
     intro: "Tailor your experience to the role in Jake’s single-column resume format.",
     empty: "Your tailored resume will appear here for editing and PDF export.",
   },
   "cover-letter": {
     title: "Cover letter", icon: FiMail, action: "Draft cover letter", result: "Letter draft",
+    draftName: "cover letter",
     intro: "Build a letter around relevant projects and experience from your resume.",
     empty: "Generate a letter to edit, copy, or save as a PDF.",
   },
   question: {
     title: "Application questions", icon: FiMessageSquare, action: "Draft answer", result: "Answer draft",
+    draftName: "answer",
     intro: "Answer an application question using your experience and the requirements of the role.",
     empty: "Your answer will appear here for editing and copying into the application.",
   },
@@ -67,6 +70,7 @@ function ToolForm({ tool }) {
   const text = draft.text ?? "";
   const generated = Boolean(draft.version && (tool !== "cover-letter" || draft.letter));
   const [loading, setLoading] = useState(false);
+  const loadingMessage = `${generated ? "Updating" : "Writing"} your ${settings.draftName}…`;
   const [error, setError] = useState("");
   const [fileError, setFileError] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
@@ -198,28 +202,32 @@ function ToolForm({ tool }) {
       <section className="tm-builder-output" aria-labelledby="builder-output-title" aria-busy={loading}>
         <div className="tm-builder-output-head">
           <h2 id="builder-output-title">{settings.result}</h2>
-          {generated && tool === "question" && <div className="tm-builder-actions">
-            <button type="button" disabled={!text.trim() || loading} onClick={copyDraft}>
+          {generated && !loading && tool === "question" && <div className="tm-builder-actions">
+            <button type="button" disabled={!text.trim()} onClick={copyDraft}>
               {copyStatus === "Copied to clipboard" ? <FiCheck aria-hidden="true" /> : <FiCopy aria-hidden="true" />} Copy
             </button>
           </div>}
         </div>
-        {generated && tool === "resume" &&
-          <ResumeDocument key={draft.version} resume={draft.resume} onChange={resume => editDraft({ resume })} />}
-        {generated && tool === "cover-letter" &&
-          <CoverLetterDocument key={draft.version} letter={draft.letter} onChange={letter => editDraft({ letter })} />}
-        {generated && tool === "question" &&
-          <div className="tm-builder-editor">
+        {generated && <div hidden={loading}>
+          {tool === "resume" &&
+            <ResumeDocument key={draft.version} resume={draft.resume} onChange={resume => editDraft({ resume })} />}
+          {tool === "cover-letter" &&
+            <CoverLetterDocument key={draft.version} letter={draft.letter} onChange={letter => editDraft({ letter })} />}
+          {tool === "question" && <div className="tm-builder-editor">
             <label htmlFor="builder-draft">Edit your answer</label>
-            <textarea id="builder-draft" value={text} onChange={event => editDraft({ text: event.target.value })} disabled={loading} />
+            <textarea id="builder-draft" value={text} onChange={event => editDraft({ text: event.target.value })} />
           </div>}
-        {!generated &&
-          <div className="tm-builder-empty"><div className="tm-builder-outline" aria-hidden="true"><Icon /><i /><i /><i /></div>
-            <p>{loading ? "Preparing your draft…" : settings.empty}</p>
+        </div>}
+        {(!generated || loading) &&
+          <div className="tm-builder-empty">
+            <div className={loading ? "tm-builder-outline tm-builder-outline--writing" : "tm-builder-outline"} aria-hidden="true">
+              <Icon /><i /><i /><i />
+            </div>
+            <p>{loading ? loadingMessage : settings.empty}</p>
           </div>}
       </section>
     </div>
-    <p className="tm-builder-announcement" role="status">{copyStatus || (loading ? "Generating your draft." : generated ? "Draft ready to edit." : "")}</p>
+    <p className="tm-builder-announcement" role="status">{copyStatus || (loading ? loadingMessage : generated && !error ? "Draft ready to edit." : "")}</p>
     {copyStatus && <p className="tm-builder-copy-status" aria-hidden="true">{copyStatus}</p>}
   </main>;
 }

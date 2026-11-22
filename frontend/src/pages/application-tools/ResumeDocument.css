@@ -17,7 +17,8 @@
 }
 .tm-rdoc-toolbar, .tm-rdoc-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .tm-rdoc-toolbar { justify-content: space-between; gap: 14px; margin-bottom: 16px; }
-.tm-rdoc-toolbar > a { color: var(--rd-muted); font-size: .85rem; text-decoration: underline; text-underline-offset: 3px; }
+.tm-rdoc-resume-actions { justify-content: flex-end; gap: 12px; padding: 16px 24px; }
+.tm-rdoc-resume-actions button { max-width: 100%; }
 .tm-rdoc button {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   min-height: 38px; padding: 7px 12px; border: 1px solid var(--rd-border); border-radius: 7px;
@@ -86,6 +87,10 @@
   .tm-rdoc-sheet { padding: 5px; }
   .tm-rdoc-paper { padding: 16px 12px; }
   .tm-rdoc-row { gap: 4pt; flex-wrap: wrap; }
+}
+@media screen and (max-width: 760px) {
+  .tm-rdoc-resume-actions { padding: 14px 16px; }
+  .tm-rdoc-resume-actions button { flex: 1 1 auto; }
 }
 @page tm-resume { size: letter; margin: .5in .58in; }
 @media print {

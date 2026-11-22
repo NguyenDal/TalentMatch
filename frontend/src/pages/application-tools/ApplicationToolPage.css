@@ -81,6 +81,25 @@
 .tm-builder-outline svg { margin-bottom: 2px; width: 17px; height: 17px; color: var(--tm-app-accent); }
 .tm-builder-outline i { display: block; height: 2px; width: 100%; background: var(--tm-app-border); }
 .tm-builder-outline i:last-child { width: 65%; }
+.tm-builder-outline--writing i::after {
+  content: "";
+  display: block;
+  height: 100%;
+  background: var(--tm-app-accent);
+  transform-origin: left center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tm-builder-outline--writing i::after {
+    animation: tm-builder-write-line 2.8s ease-in-out infinite both;
+  }
+  .tm-builder-outline--writing i:nth-of-type(2)::after { animation-delay: .35s; }
+  .tm-builder-outline--writing i:nth-of-type(3)::after { animation-delay: .7s; }
+  @keyframes tm-builder-write-line {
+    0%, 8% { transform: scaleX(0); opacity: 0; }
+    28%, 68% { transform: scaleX(1); opacity: .9; }
+    85%, 100% { transform: scaleX(1); opacity: 0; }
+  }
+}
 .tm-builder-spin { animation: tm-builder-spin 1s linear infinite; }
 @keyframes tm-builder-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .tm-builder-spin { animation: none; } }

@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import axios from "axios";
 import ApplicationToolPage from "../../../pages/application-tools/ApplicationToolPage";
 import { ApplicationMaterialsProvider } from "../../../contexts/ApplicationMaterials";
@@ -125,16 +125,59 @@ test("validates files and handles an unavailable service or malformed resume wit
   expect(screen.getByLabelText("Job description")).toHaveValue("Write SQL reports.");
 });
 
-test("renders the resume in the document editor and clears it when the source is removed", async () => {
-  renderTool("resume");
+test.each([
+  {
+    tool: "resume", previewName: "Resume preview", draftName: "résumé", action: "Build resume",
+    editButton: "Edit résumé", fieldName: "Name",
+    data: { resume: { name: "Taylor Example", contact: [], education: [], experience: [], projects: [], skills: [{ category: "Data", items: ["SQL"] }] } },
+  },
+  {
+    tool: "cover-letter", previewName: "Letter draft", draftName: "cover letter", action: "Draft cover letter",
+    editButton: "Edit letter", fieldName: /Body paragraphs/, data: { letter },
+  },
+  {
+    tool: "question", previewName: "Answer draft", draftName: "answer", action: "Draft answer",
+    fieldName: "Edit your answer", data: { text: "I delivered reporting tools." },
+  },
+])("shows $tool drafting progress and restores edits after a failed retry", async ({
+  tool, previewName, draftName, action, editButton, fieldName, data,
+}) => {
+  renderTool(tool);
   fillMaterials();
-  axios.post.mockResolvedValueOnce({ data: { resume: {
-    name: "Taylor Example", contact: [], education: [], experience: [], projects: [],
-    skills: [{ category: "Data", items: ["SQL"] }],
-  } } });
-  fireEvent.click(screen.getByRole("button", { name: "Build resume" }));
-  expect((await screen.findAllByRole("heading", { name: "Taylor Example" })).length).toBeGreaterThan(0);
+  if (tool === "question") {
+    fireEvent.change(screen.getByLabelText("Application question"), { target: { value: "What have you delivered?" } });
+  }
+  const preview = screen.getByRole("region", { name: previewName });
+  const status = screen.getByRole("status");
+  const writing = `Writing your ${draftName}…`;
+  const updating = `Updating your ${draftName}…`;
+  expect(preview).toHaveAttribute("aria-busy", "false");
+  expect(within(preview).queryByText(writing)).not.toBeInTheDocument();
+  let finish;
+  axios.post.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  fireEvent.click(screen.getByRole("button", { name: action }));
+  expect(preview).toHaveAttribute("aria-busy", "true");
+  expect(within(preview).getByText(writing)).toBeVisible();
+  expect(status).toHaveTextContent(writing);
+  await act(async () => finish({ data }));
+  expect(within(preview).queryByText(writing)).not.toBeInTheDocument();
+  if (editButton) fireEvent.click(within(preview).getByRole("button", { name: editButton }));
+  const field = { name: fieldName };
+  fireEvent.change(within(preview).getByRole("textbox", field), { target: { value: "My edited draft" } });
+
+  let fail;
+  axios.post.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
+  fireEvent.click(screen.getByRole("button", { name: "Regenerate draft" }));
+  expect(within(preview).getByText(updating)).toBeVisible();
+  expect(status).toHaveTextContent(updating);
+  expect(within(preview).queryByRole("textbox", field)).not.toBeInTheDocument();
+  await act(async () => fail(new Error("Unable to regenerate")));
+  expect(screen.getByRole("alert")).toHaveTextContent("couldn’t generate");
+  expect(preview).toHaveAttribute("aria-busy", "false");
+  expect(within(preview).queryByText(updating)).not.toBeInTheDocument();
+  expect(within(preview).getByRole("textbox", field)).toHaveValue("My edited draft");
+
   fireEvent.click(screen.getByRole("button", { name: "Remove file" }));
-  expect(screen.queryByRole("heading", { name: "Taylor Example" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Build resume" })).toBeDisabled();
+  expect(within(preview).queryByRole("textbox", field)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: action })).toBeDisabled();
 });

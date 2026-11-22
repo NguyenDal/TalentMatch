@@ -16,6 +16,10 @@ function EditableResume() {
 
 test("uses the template order and excludes empty sections and extra controls from the print document", () => {
   const { container, unmount } = render(<ResumeDocument resume={resume} />);
+  const actions = within(container).getByRole("group", { name: "Résumé actions" });
+  expect(within(actions).queryByRole("link")).toBeNull();
+  expect(within(actions).getAllByRole("button").map(button => button.textContent.trim()))
+    .toEqual(["Edit résumé", "Print / Save PDF"]);
   const paper = within(container).getByRole("article", { name: "Résumé document" });
   expect(within(paper).getAllByRole("heading").map(node => node.textContent))
     .toEqual(["Sample Candidate", "Education", "Experience", "Technical Skills"]);

@@ -8,7 +8,8 @@
   font-family: "TalentMatch Letter Serif"; font-weight: 700; font-style: normal; font-display: swap;
   src: url("../../assets/fonts/dejavu/DejaVuSerif-Bold.woff") format("woff");
 }
-.tm-cldoc-status { font-size: .8rem; color: var(--rd-muted); }
+.tm-cldoc-status { margin: 0; color: var(--rd-muted); font-size: .8rem; text-align: end; overflow-wrap: anywhere; }
+.tm-cldoc-status:not(:empty) { padding: 0 24px 12px; }
 .tm-cldoc-paper {
   box-sizing: border-box; width: 100%; max-width: 8.5in; margin: 0 auto;
   padding: clamp(16px, 6%, 44pt) clamp(18px, 8%, 60pt) clamp(18px, 7%, 48pt);
@@ -33,6 +34,9 @@
 .tm-cldoc-print { display: none; }
 @media screen and (max-width: 600px) {
   .tm-cldoc-paper { padding: 20px 14px; }
+}
+@media screen and (max-width: 760px) {
+  .tm-cldoc-status:not(:empty) { padding-inline: 16px; }
 }
 @page tm-letter { size: letter; margin: 44pt 60pt 48pt; }
 @media print {

@@ -40,11 +40,18 @@ test("edited paragraphs and a changed role reach both copy and print", async () 
     fireEvent.click(screen.getByRole("button", { name: "Done editing" }));
     fireEvent.click(screen.getByRole("button", { name: "Copy" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Re: Data analyst\n\nDear Selection Committee,\n\nFirst revised paragraph.\n\nSecond revised paragraph.")));
+    const status = screen.getByRole("status");
+    await waitFor(() => expect(status).toHaveTextContent("Copied to clipboard"));
+    const actions = screen.getByRole("group", { name: "Cover letter actions" });
+    expect(actions).not.toContainElement(status);
     fireEvent.click(screen.getByRole("button", { name: "Print / Save PDF" }));
     await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
     const output = document.querySelector(".tm-cldoc-print");
     expect(output).toHaveTextContent("Second revised paragraph.");
     expect(output.querySelector("button, textarea")).toBeNull();
+    fireEvent.click(within(actions).getByRole("button", { name: "Edit letter" }));
+    expect(status).toBeEmptyDOMElement();
+    expect(within(actions).getByRole("button", { name: "Done editing" })).toBeInTheDocument();
   } finally {
     print.mockRestore();
     if (original) Object.defineProperty(navigator, "clipboard", original);

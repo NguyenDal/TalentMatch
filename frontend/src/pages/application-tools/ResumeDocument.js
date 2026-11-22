@@ -129,7 +129,7 @@ export default function ResumeDocument({ resume, onChange }) {
   const setCurrent = onChange || setLocal;
 
   return <div className="tm-rdoc">
-    <div className="tm-rdoc-actions tm-rdoc-resume-actions" role="group" aria-label="Résumé actions">
+    <div className="tm-rdoc-actions" role="group" aria-label="Résumé actions">
       {beforeEditing ? <>
         <button type="button" onClick={() => { setCurrent(beforeEditing); setBeforeEditing(null); }}>Cancel edits</button>
         <button type="button" className="tm-rdoc-primary" onClick={() => setBeforeEditing(null)}>Done editing</button>

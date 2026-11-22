@@ -86,19 +86,17 @@ export default function CoverLetterDocument({ letter, onChange }) {
     window.print();
   }
   return <div className="tm-rdoc tm-cldoc">
-    <div className="tm-rdoc-toolbar">
-      <div className="tm-rdoc-actions">
-        {beforeEditing ? <>
-          <button type="button" onClick={() => { onChange(beforeEditing); setBeforeEditing(null); }}>Cancel edits</button>
-          <button type="button" className="tm-rdoc-primary" onClick={() => setBeforeEditing(null)}>Done editing</button>
-        </> : <>
-          <button type="button" onClick={() => setBeforeEditing(letter)}><FiEdit2 aria-hidden="true" /> Edit letter</button>
-          <button type="button" onClick={copy}>{copyMessage === "Copied to clipboard" ? <FiCheck aria-hidden="true" /> : <FiCopy aria-hidden="true" />} Copy</button>
-          <button type="button" className="tm-rdoc-primary" onClick={print}><FiPrinter aria-hidden="true" /> Print / Save PDF</button>
-        </>}
-      </div>
-      <span className="tm-cldoc-status" role="status">{copyMessage}</span>
+    <div className="tm-rdoc-actions" role="group" aria-label="Cover letter actions">
+      {beforeEditing ? <>
+        <button type="button" onClick={() => { onChange(beforeEditing); setBeforeEditing(null); }}>Cancel edits</button>
+        <button type="button" className="tm-rdoc-primary" onClick={() => setBeforeEditing(null)}>Done editing</button>
+      </> : <>
+        <button type="button" onClick={() => { setCopyMessage(""); setBeforeEditing(letter); }}><FiEdit2 aria-hidden="true" /> Edit letter</button>
+        <button type="button" onClick={copy}>{copyMessage === "Copied to clipboard" ? <FiCheck aria-hidden="true" /> : <FiCopy aria-hidden="true" />} Copy</button>
+        <button type="button" className="tm-rdoc-primary" onClick={print}><FiPrinter aria-hidden="true" /> Print / Save PDF</button>
+      </>}
     </div>
+    <p className="tm-cldoc-status" role="status">{beforeEditing ? "" : copyMessage}</p>
     {beforeEditing ? <LetterEditor letter={letter} update={(key, value) => onChange({ ...letter, [key]: value })} /> :
       <div className="tm-rdoc-sheet"><LetterPaper letter={letter} /></div>}
     {createPortal(<div className="tm-cldoc-print"><LetterPaper letter={letter} /></div>, document.body)}

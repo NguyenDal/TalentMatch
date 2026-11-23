@@ -54,6 +54,7 @@ test("matching email requires explicit confirmation before storing any session",
   await begin();
   deliver({ status: "link_required", ticket: "pending-link", email: auth.email, replaces_unverified_password: true });
   expect(screen.getByRole("dialog", { name: "Link your account to Google?" })).toBeVisible();
+  expect(screen.queryByRole("checkbox")).toBeNull();
   expect(screen.getByText(/replace its existing password/)).toBeVisible();
   expect(setAuthData).not.toHaveBeenCalled();
   expect(axios.post).not.toHaveBeenCalled();
@@ -85,7 +86,7 @@ test("password challenge errors stay in the link dialog", async () => {
   expect(axios.post.mock.calls[0][1]).toEqual({ ticket: "protected", confirm: true, password: "wrong-password" });
 });
 
-test("new Google account asks only for a unique username and submits no personal names or password", async () => {
+test("new Google signup requires a unique username and explicit agreement to the current policies", async () => {
   await begin();
   deliver({ status: "signup_required", ticket: "new-user", email: auth.email });
   expect(screen.getByLabelText("Username")).toHaveValue("");
@@ -94,10 +95,21 @@ test("new Google account asks only for a unique username and submits no personal
   expect(screen.getByRole("button", { name: "Create account" })).toBeDisabled();
   axios.get.mockResolvedValueOnce({ data: { available: true, valid: true, message: "This username is available." } });
   fireEvent.change(screen.getByLabelText("Username"), { target: { value: "chosen_user" } });
+  await screen.findByText("This username is available.");
+  const agreement = screen.getByRole("checkbox", { name: /^I agree to the Privacy Policy and Terms and Conditions\s*\.$/ });
+  expect(agreement.labels[0].textContent).toBe("I agree to the Privacy Policy and Terms and Conditions. *");
+  expect(screen.getByText("*")).toHaveAttribute("aria-hidden", "true");
+  expect(agreement).not.toBeChecked();
+  expect(screen.getByRole("link", { name: "Terms and Conditions" })).toHaveAttribute("href", "/terms");
+  expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
+  expect(screen.getByRole("button", { name: "Create account" })).toBeDisabled();
+  fireEvent.submit(agreement.closest("form"));
+  expect(axios.post).not.toHaveBeenCalled();
+  fireEvent.click(agreement);
   await waitFor(() => expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Create account" }));
   await waitFor(() => expect(setAuthData).toHaveBeenCalledTimes(1));
-  expect(axios.post).toHaveBeenCalledWith(`${BASE_URL}/auth/google/signup/`, { ticket: "new-user", username: "chosen_user" }, { withCredentials: true });
+  expect(axios.post).toHaveBeenCalledWith(`${BASE_URL}/auth/google/signup/`, { ticket: "new-user", username: "chosen_user", accepted_policy_version: "2026-11-23" }, { withCredentials: true });
 });
 
 test("reports blocked popups without starting a session", async () => {

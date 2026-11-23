@@ -32,11 +32,13 @@ with patch.dict(os.environ, TEST_ENV), patch("dotenv.load_dotenv", return_value=
     from app.main import app
     from app.authentication.passwords import hash_password, verify_password
     from app.infrastructure.database import Base, get_db
-    from app.models import GoogleAuthFlow, GoogleAuthTicket, GoogleIdentity, LoginEvent, User, UserSession
+    from app.models import GoogleAuthFlow, GoogleAuthTicket, GoogleIdentity, LoginEvent, PolicyAcceptance, User, UserSession
+    from app.authentication.sessions import POLICY_VERSION
     from app.authentication import google as google_auth
     from app.authentication import limits as auth_limits
 
 ORIGIN = {"Origin": TEST_ENV["FRONTEND_URL"]}
+AGREEMENT = {"accepted_policy_version": POLICY_VERSION}
 
 
 def popup_payload(response):
@@ -98,7 +100,7 @@ class GoogleAuthTests(unittest.TestCase):
     def complete_signup(self, username="new_user", **kwargs):
         pending = self.oauth(**kwargs)
         self.assertEqual(pending["status"], "signup_required")
-        response = self.client.post("/auth/google/signup/", json={"ticket": pending["ticket"], "username": username}, headers=ORIGIN)
+        response = self.client.post("/auth/google/signup/", json={"ticket": pending["ticket"], "username": username, **AGREEMENT}, headers=ORIGIN)
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
 
@@ -134,7 +136,7 @@ class GoogleAuthTests(unittest.TestCase):
         self.assertFalse(self.client.get("/auth/username-availability/", params={"username": "a!"}).json()["valid"])
         self.assertTrue(self.client.get("/auth/username-availability/", params={"username": "available_1"}).json()["available"])
         pending = self.oauth(email="new@gmail.com")
-        response = self.client.post("/auth/google/signup/", json={"ticket": pending["ticket"], "username": "TAKEN"}, headers=ORIGIN)
+        response = self.client.post("/auth/google/signup/", json={"ticket": pending["ticket"], "username": "TAKEN", **AGREEMENT}, headers=ORIGIN)
         self.assertEqual(response.status_code, 409)
         with self.sessions() as db:
             self.assertEqual(db.query(User).count(), 1)
@@ -143,15 +145,36 @@ class GoogleAuthTests(unittest.TestCase):
             with self.assertRaises(IntegrityError):
                 db.commit()
             db.rollback()
-        response = self.client.post("/auth/google/signup/", json={"ticket": pending["ticket"], "username": "other_user"}, headers=ORIGIN)
+        response = self.client.post("/auth/google/signup/", json={"ticket": pending["ticket"], "username": "other_user", **AGREEMENT}, headers=ORIGIN)
         self.assertEqual(response.status_code, 200)
 
-    def test_normal_signup_only_username_email_password_and_unique_email(self):
-        response = self.client.post("/register/", data={"username": "standard", "email": "Owner@Gmail.com", "password": "new-password"})
+    def test_normal_signup_response_and_unique_email(self):
+        response = self.client.post("/register/", data={"username": "standard", "email": "Owner@Gmail.com", "password": "new-password", **AGREEMENT})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(set(response.json()), {"id", "username", "email"})
-        response = self.client.post("/register/", data={"username": "other", "email": "owner@gmail.com", "password": "new-password"})
+        response = self.client.post("/register/", data={"username": "other", "email": "owner@gmail.com", "password": "new-password", **AGREEMENT})
         self.assertEqual(response.status_code, 409)
+
+    def test_signup_agreement_is_required_and_recorded_for_both_account_types(self):
+        password_form = {"username": "standard", "email": "standard@example.com", "password": "new-password"}
+        pending = self.oauth(email="new@gmail.com")
+        google_body = {"ticket": pending["ticket"], "username": "google_user"}
+        for rejected in ({}, {"accepted_policy_version": "false"}, {"accepted_policy_version": "2025-01-01"}):
+            self.assertEqual(self.client.post("/register/", data={**password_form, **rejected}).status_code, 422)
+            self.assertEqual(self.client.post("/auth/google/signup/", json={**google_body, **rejected}, headers=ORIGIN).status_code, 422)
+        with self.sessions() as db:
+            self.assertEqual(db.query(User).count(), 0)
+            self.assertEqual(db.query(PolicyAcceptance).count(), 0)
+            self.assertIsNone(db.query(GoogleAuthTicket).one().consumed_at)
+        password_signup = self.client.post("/register/", data={**password_form, **AGREEMENT})
+        google_signup = self.client.post("/auth/google/signup/", json={**google_body, **AGREEMENT}, headers=ORIGIN)
+        self.assertEqual(password_signup.status_code, 200, password_signup.text)
+        self.assertEqual(google_signup.status_code, 200, google_signup.text)
+        with self.sessions() as db:
+            for user_id in (password_signup.json()["id"], google_signup.json()["user_id"]):
+                receipt = db.get(PolicyAcceptance, user_id)
+                self.assertEqual(receipt.version, POLICY_VERSION)
+                self.assertIsNotNone(receipt.accepted_at)
 
     def test_existing_account_requires_consent_cancel_changes_nothing(self):
         user_id = self.local_user()
@@ -216,7 +239,7 @@ class GoogleAuthTests(unittest.TestCase):
 
     def test_ticket_binding_origin_expiry_and_replay(self):
         pending = self.oauth()
-        body = {"ticket": pending["ticket"], "username": "new_user"}
+        body = {"ticket": pending["ticket"], "username": "new_user", **AGREEMENT}
         self.assertEqual(self.client.post("/auth/google/signup/", json=body, headers={"Origin": "https://attacker.example"}).status_code, 403)
         with TestClient(app) as other_browser:
             self.assertEqual(other_browser.post("/auth/google/signup/", json=body, headers=ORIGIN).status_code, 400)
@@ -226,7 +249,7 @@ class GoogleAuthTests(unittest.TestCase):
         with self.sessions() as db:
             db.query(GoogleAuthTicket).filter_by(token_hash=google_auth.digest(pending["ticket"])).one().expires_at = datetime.utcnow() - timedelta(seconds=1)
             db.commit()
-        self.assertEqual(self.client.post("/auth/google/signup/", json={"ticket": pending["ticket"], "username": "second"}, headers=ORIGIN).status_code, 400)
+        self.assertEqual(self.client.post("/auth/google/signup/", json={"ticket": pending["ticket"], "username": "second", **AGREEMENT}, headers=ORIGIN).status_code, 400)
 
     def test_stale_link_cannot_bind_after_password_change(self):
         user_id = self.local_user()

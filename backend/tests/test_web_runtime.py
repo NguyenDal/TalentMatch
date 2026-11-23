@@ -60,7 +60,7 @@ class WebRuntimeTests(unittest.TestCase):
 
     def test_spa_routes_refresh_without_intercepting_api_errors(self):
         for route in ("/", "/login", "/signup", "/contact", "/dashboard/settings/security", "/reset-password?token=example",
-                      "/resume-builder", "/cover-letter", "/application-questions", "/jobs", "/job-fit"):
+                      "/resume-builder", "/cover-letter", "/application-questions", "/jobs", "/job-fit", "/privacy", "/terms"):
             with self.subTest(route=route):
                 response = self.client.get(route)
                 self.assertEqual(response.status_code, 200)

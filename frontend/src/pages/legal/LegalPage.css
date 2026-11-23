@@ -1,0 +1,37 @@
+.tm-legal {
+  --legal-ink: var(--tm-ink, #252438);
+  --legal-muted: var(--tm-muted, #605e70);
+  --legal-accent: #6546c3;
+  --legal-border: #dedce5;
+  width: min(1100px, calc(100% - 3rem));
+  margin: 0 auto;
+  padding: clamp(2.5rem, 6vw, 5rem) 0 clamp(3rem, 7vw, 6rem);
+  color: var(--legal-ink);
+  text-align: start;
+}
+.dark .tm-legal {
+  --legal-ink: var(--tm-dark-ink);
+  --legal-muted: var(--tm-dark-muted);
+  --legal-accent: var(--tm-dark-accent);
+  --legal-border: var(--tm-dark-border);
+}
+.tm-legal-header { padding-bottom: clamp(1.5rem, 4vw, 2.75rem); border-bottom: 1px solid var(--legal-border); }
+.tm-legal-header h1 { margin: 0; font-size: clamp(2.25rem, 5.6vw, 4rem); line-height: 1.06; letter-spacing: -.05em; font-weight: 720; }
+.tm-legal-header p { max-width: 66ch; margin: 1rem 0; color: var(--legal-muted); font-size: 1.0625rem; line-height: 1.65; }
+.tm-legal-header small { color: var(--legal-muted); font-size: .8125rem; }
+.tm-legal-layout { display: grid; grid-template-columns: minmax(11rem, 1fr) minmax(0, 3fr); gap: clamp(2rem, 6vw, 6rem); align-items: start; padding-top: clamp(1.75rem, 4vw, 3rem); }
+.tm-legal-index { position: sticky; top: 2rem; }
+.tm-legal-index h2 { margin: 0 0 .7rem; font-size: .875rem; font-weight: 680; }
+.tm-legal-index ul { margin: 0; padding: 0; list-style: none; }
+.tm-legal-index a { display: block; width: fit-content; padding: .3rem 0; color: var(--legal-muted); font-size: .875rem; line-height: 1.45; }
+.tm-legal-index a:hover { color: var(--legal-accent); text-decoration: underline; }
+.tm-legal-content { max-width: 70ch; }
+.tm-legal-content section + section { padding-top: clamp(1.5rem, 3vw, 2.25rem); margin-top: clamp(1.5rem, 3vw, 2.25rem); border-top: 1px solid var(--legal-border); }
+.tm-legal-content h2 { margin: 0; scroll-margin-top: 1.5rem; font-weight: 680; font-size: clamp(1.3rem, 2.3vw, 1.65rem); line-height: 1.25; letter-spacing: -.025em; }
+.tm-legal-content p { margin: .75rem 0 0; font-size: 1rem; line-height: 1.75; overflow-wrap: anywhere; }
+.tm-legal-content a { color: var(--legal-accent); text-decoration: underline; text-underline-offset: .18em; }
+.tm-legal a:focus-visible { outline: 2px solid var(--legal-accent); outline-offset: 3px; border-radius: 2px; }
+@media (max-width: 700px) {
+  .tm-legal-layout { grid-template-columns: 1fr; gap: 1.75rem; }
+  .tm-legal-index { position: static; padding-bottom: 1.5rem; border-bottom: 1px solid var(--legal-border); }
+}

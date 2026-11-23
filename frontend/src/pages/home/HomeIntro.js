@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import {
   FiArrowDown, FiArrowRight, FiArrowUpRight,
-  FiBriefcase, FiFileText, FiLayers, FiTarget, FiUpload,
+  FiBriefcase, FiFileText, FiTarget, FiUpload,
 } from "react-icons/fi";
 import "./HomeIntro.css";
 import MatchWalkthrough from "./MatchWalkthrough";
@@ -15,7 +15,6 @@ const steps = [
 
 export default function HomeIntro() {
   return (
-    <>
       <main className="tm-landing" id="main-content">
         <section className="tm-hero" aria-labelledby="tm-hero-title">
           <div className="tm-container tm-hero-grid">
@@ -65,12 +64,5 @@ export default function HomeIntro() {
           </div>
         </section>
       </main>
-      <footer className="tm-footer">
-        <div className="tm-container tm-footer-inner">
-          <Link className="tm-footer-brand" to="/" aria-label="TalentMatch home"><FiLayers aria-hidden="true" /> TalentMatch<span>.</span></Link>
-          <Link to="/contact">Get in touch <FiArrowUpRight aria-hidden="true" /></Link>
-        </div>
-      </footer>
-    </>
   );
 }

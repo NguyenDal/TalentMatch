@@ -8,7 +8,7 @@ import httpx
 from app.authentication.limits import AuthRequestLimiter
 from app.authentication.sessions import get_current_user
 from app.matching.documents import read_resume
-from app.matching.greenhouse import API, BOARDS, DETAIL_BYTES, PublicBoards, plain_description, public_json
+from app.matching.greenhouse import API, BOARDS, DETAIL_BYTES, PublicBoards, description_blocks, description_sections, public_json
 from app.matching.job_terms import skills_in, words
 from app.models import User
 
@@ -78,8 +78,8 @@ def selected_posting(board: str, job_id: int):
         payload = public_json(f"{API}/{board}/jobs/{job_id}", DETAIL_BYTES)
         if payload.get("id") != job_id:
             raise ValueError("Mismatched public job.")
-        description = plain_description(payload.get("content"))
-        if not description:
+        blocks = description_blocks(payload.get("content"))
+        if not blocks:
             raise ValueError("Missing public description.")
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code in (404, 410):
@@ -87,4 +87,4 @@ def selected_posting(board: str, job_id: int):
         raise HTTPException(503, "The employer could not be reached. Please try again shortly.") from exc
     except (httpx.HTTPError, ValueError) as exc:
         raise HTTPException(503, "The employer’s job description is temporarily unavailable.") from exc
-    return {"description": description}
+    return {"description": "\n".join(text for _, text in blocks), "description_sections": description_sections(blocks)}

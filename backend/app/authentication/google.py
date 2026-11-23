@@ -22,9 +22,9 @@ from starlette.concurrency import run_in_threadpool
 
 from app.authentication.passwords import verify_password
 from app.authentication.limits import require_auth_rate_limit
-from app.authentication.sessions import issue_session, normalized_email, require_username, revoke_user_sessions, user_by_email, username_status
+from app.authentication.sessions import issue_session, normalized_email, require_policy_version, require_username, revoke_user_sessions, user_by_email, username_status
 from app.infrastructure.database import get_db
-from app.models import GoogleAuthFlow, GoogleAuthTicket, GoogleIdentity, User
+from app.models import GoogleAuthFlow, GoogleAuthTicket, GoogleIdentity, PolicyAcceptance, User
 
 router = APIRouter()
 COOKIE_NAME = "tm_google_browser"
@@ -283,6 +283,7 @@ class TicketRequest(BaseModel):
 
 class SignupRequest(TicketRequest):
     username: str = Field(min_length=1, max_length=100)
+    accepted_policy_version: str = ""
 
 
 class LinkRequest(TicketRequest):
@@ -304,6 +305,7 @@ def locked_ticket(db, request, raw_ticket, expected_kind=None):
 @router.post("/auth/google/signup/")
 def complete_signup(body: SignupRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     ticket = locked_ticket(db, request, body.ticket, "signup")
+    version = require_policy_version(body.accepted_policy_version)
     username = require_username(db, body.username)
     if user_by_email(db, ticket.email) or db.query(GoogleIdentity.id).filter(GoogleIdentity.subject == ticket.subject).first():
         raise HTTPException(status_code=409, detail="An account already exists. Please start Google sign-in again to link it.")
@@ -312,6 +314,7 @@ def complete_signup(body: SignupRequest, request: Request, response: Response, d
         db.add(user)
         db.flush()
         db.add(GoogleIdentity(user_id=user.id, subject=ticket.subject))
+        db.add(PolicyAcceptance(user_id=user.id, version=version))
         ticket.consumed_at = datetime.utcnow()
         auth = issue_session(user, request, db, ticket.remember, commit=False)
         db.commit()

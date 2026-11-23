@@ -22,42 +22,122 @@ FEED_BYTES = 8 * 1024 * 1024
 DETAIL_BYTES = 512 * 1024
 
 
-class DescriptionText(HTMLParser):
-    blocks = {"br", "p", "div", "li", "ul", "ol", "h1", "h2", "h3", "h4", "tr", "section"}
+class DescriptionParser(HTMLParser):
+    headings = {"h1", "h2", "h3", "h4", "h5", "h6"}
+    paragraphs = {"br", "p", "div", "tr", "section", "article", "blockquote"}
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.parts = []
+        self.blocks = []
+        self.list_types = []
+        self.in_item = 0
+        self.in_heading = 0
+        self.in_bold = 0
+        self.has_unbolded_text = False
+        self.has_markup = False
         self.ignored = 0
 
+    def flush(self):
+        text = " ".join("".join(self.parts).split())
+        if text:
+            if self.in_item:
+                kind = self.list_types[-1] if self.list_types else "ul"
+            elif self.in_heading or (not self.has_unbolded_text and len(text) <= 100):
+                kind = "heading"
+            else:
+                kind = "paragraph"
+            self.blocks.append((kind, text))
+        self.parts.clear()
+        self.has_unbolded_text = False
+
+    def boundary(self, tag):
+        if tag in self.headings or tag in {"ul", "ol", "li"}:
+            self.flush()
+        elif tag in self.paragraphs:
+            if self.in_item:
+                self.parts.append(" ")
+            else:
+                self.flush()
+        elif tag in {"td", "th"}:
+            self.parts.append(" ")
+
     def handle_starttag(self, tag, attrs):
+        self.has_markup = True
         if tag in {"style", "script"}:
             self.ignored += 1
-        elif not self.ignored and tag in self.blocks:
-            self.parts.append("\n")
+        if self.ignored:
+            return
+        self.boundary(tag)
+        if tag in {"ul", "ol"}:
+            self.list_types.append(tag)
+        elif tag == "li":
+            self.in_item += 1
+        elif tag in self.headings:
+            self.in_heading += 1
+        elif tag in {"b", "strong"}:
+            self.in_bold += 1
 
     def handle_endtag(self, tag):
         if tag in {"style", "script"}:
             self.ignored = max(0, self.ignored - 1)
-        elif not self.ignored and tag in self.blocks:
-            self.parts.append("\n")
+            return
+        if self.ignored:
+            return
+        self.boundary(tag)
+        if tag in {"ul", "ol"} and self.list_types:
+            self.list_types.pop()
+        elif tag == "li":
+            self.in_item = max(0, self.in_item - 1)
+        elif tag in self.headings:
+            self.in_heading = max(0, self.in_heading - 1)
+        elif tag in {"b", "strong"}:
+            self.in_bold = max(0, self.in_bold - 1)
 
     def handle_data(self, data):
         if not self.ignored:
             self.parts.append(data)
+            if not self.in_bold and data.strip():
+                self.has_unbolded_text = True
 
 
-def plain_description(content):
+def description_blocks(content):
     if not isinstance(content, str):
-        return ""
+        return []
     # Greenhouse's JSON normally contains HTML escaped as text.
     if re.search(r"&lt;/?[a-z][^&]*?(?:&gt;|\s)", content, re.IGNORECASE):
         content = unescape(content)
-    parser = DescriptionText()
+    parser = DescriptionParser()
     parser.feed(content)
     parser.close()
-    lines = (" ".join(line.split()) for line in "".join(parser.parts).splitlines())
-    return "\n".join(line for line in lines if line)
+    if not parser.has_markup:
+        lines = (" ".join(line.split()) for line in "".join(parser.parts).splitlines())
+        return [("paragraph", line) for line in lines if line]
+    parser.flush()
+    return parser.blocks
+
+
+def plain_description(content):
+    return "\n".join(text for _, text in description_blocks(content))
+
+
+def description_sections(blocks):
+    """Keep employer headings and group consecutive list items for the reader."""
+    sections = []
+    for kind, text in blocks:
+        if kind == "heading":
+            sections.append({"title": text, "blocks": []})
+            continue
+        if not sections:
+            sections.append({"title": "", "blocks": []})
+        body = sections[-1]["blocks"]
+        if kind == "paragraph":
+            body.append({"type": "paragraph", "text": text})
+        elif body and body[-1]["type"] == kind:
+            body[-1]["items"].append(text)
+        else:
+            body.append({"type": kind, "items": [text]})
+    return sections
 
 
 def public_json(url, limit, params=None):

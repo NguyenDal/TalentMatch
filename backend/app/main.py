@@ -18,6 +18,7 @@ from app.matching.limits import (match_limiter, trends_limiter, MAX_JOB_CHARACTE
     MAX_PROFILE_PROFESSION_CHARACTERS, MAX_PROFILE_BIO_CHARACTERS)
 from app.matching.documents import read_resume
 from app.matching.job_search import router as job_search_router
+from app.matching.applied_jobs import router as applied_jobs_router
 from app.matching.application_drafts import (
     ApplicationTool, BASE_PROMPT, MAX_QUESTION_CHARACTERS, OUTPUT_TOKENS, TOOL_PROMPTS,
     COVER_LETTER_RESPONSE_FORMAT, WRITTEN_RESPONSE_FORMAT, validated_draft,
@@ -31,8 +32,8 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy import or_, func
 from app.authentication.passwords import hash_password, verify_password
 from app.authentication.limits import require_auth_rate_limit
-from app.models import User, LoginEvent, UserSession, GoogleIdentity, GoogleAuthTicket
-from app.authentication.sessions import (get_current_user, get_current_user_locked, issue_session, normalized_email, require_username, revoke_user_sessions,
+from app.models import AppliedJob, PolicyAcceptance, User, LoginEvent, UserSession, GoogleIdentity, GoogleAuthTicket
+from app.authentication.sessions import (get_current_user, get_current_user_locked, issue_session, normalized_email, require_policy_version, require_username, revoke_user_sessions,
     set_initial_password, signing_secret, user_by_email, validate_password, USERNAME_PATTERN)
 from app.authentication.google import router as google_auth_router, frontend_origin
 from app.infrastructure.database import get_db
@@ -401,6 +402,7 @@ class LogoutSessionRequest(BaseModel):
 app = FastAPI()
 app.include_router(google_auth_router)
 app.include_router(job_search_router)
+app.include_router(applied_jobs_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[frontend_origin()],
@@ -557,8 +559,10 @@ def register_user(
     username: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
+    accepted_policy_version: str = Form(""),
     db: Session = Depends(get_db)
 ):
+    version = require_policy_version(accepted_policy_version)
     username = require_username(db, username)
     try:
         email = validate_email(email.strip(), check_deliverability=False).normalized.lower()
@@ -570,6 +574,8 @@ def register_user(
     new_user = User(username=username, email=email, hashed_password=hash_password(password))
     db.add(new_user)
     try:
+        db.flush()
+        db.add(PolicyAcceptance(user_id=new_user.id, version=version))
         db.commit()
         db.refresh(new_user)
     except IntegrityError:
@@ -1148,6 +1154,8 @@ def delete_account(
         # The authenticated user row stays locked until this single transaction
         # completes. Legacy session/login foreign keys do not cascade on delete.
         user_id = current_user.id
+        db.query(AppliedJob).filter(AppliedJob.user_id == user_id).delete(synchronize_session=False)
+        db.query(PolicyAcceptance).filter(PolicyAcceptance.user_id == user_id).delete(synchronize_session=False)
         db.query(UserSession).filter(UserSession.user_id == user_id).delete(synchronize_session=False)
         db.query(LoginEvent).filter(LoginEvent.user_id == user_id).delete(synchronize_session=False)
         db.query(GoogleAuthTicket).filter(GoogleAuthTicket.target_user_id == user_id).delete(synchronize_session=False)

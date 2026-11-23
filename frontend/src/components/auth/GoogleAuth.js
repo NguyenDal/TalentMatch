@@ -5,6 +5,7 @@ import { BASE_URL } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
 import AuthField, { AuthError } from "./AuthField";
 import UsernameField from "./UsernameField";
+import PolicyAgreement, { POLICY_VERSION } from "./PolicyAgreement";
 import useUsernameAvailability from "../../hooks/useUsernameAvailability";
 import { getAuthPopupFeatures } from "../../utils/authPopupPosition";
 import "./GoogleAuth.css";
@@ -24,6 +25,7 @@ function GoogleAccountDialog({ pending, onCancel, onComplete, returnFocus }) {
   const dialog = useRef(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const availability = useUsernameAvailability(username);
@@ -46,11 +48,11 @@ function GoogleAccountDialog({ pending, onCancel, onComplete, returnFocus }) {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (busy || (signup && !availability.available)) return;
+    if (busy || (signup && (!availability.available || !accepted))) return;
     setBusy(true);
     setError("");
     try {
-      const body = signup ? { ticket: pending.ticket, username } : {
+      const body = signup ? { ticket: pending.ticket, username, accepted_policy_version: POLICY_VERSION } : {
         ticket: pending.ticket, confirm: true,
         ...(pending.requires_password ? { password } : {}),
       };
@@ -65,7 +67,7 @@ function GoogleAccountDialog({ pending, onCancel, onComplete, returnFocus }) {
 
   const trapFocus = (event) => {
     if (event.key !== "Tab") return;
-    const elements = Array.from(dialog.current.querySelectorAll("button:not(:disabled), input:not(:disabled), [tabindex='0']"));
+    const elements = Array.from(dialog.current.querySelectorAll("button:not(:disabled), input:not(:disabled), a[href], [tabindex='0']"));
     const first = elements[0];
     const last = elements[elements.length - 1];
     if (!first) { event.preventDefault(); return; }
@@ -95,10 +97,11 @@ function GoogleAccountDialog({ pending, onCancel, onComplete, returnFocus }) {
         This account’s email hasn’t been verified yet. Linking Google will replace its existing password to keep your account secure. You can set a new password in Settings afterward.
       </p>}
       {signup && <p className="tm-google-help">No password needed. You can add one later in Settings.</p>}
+      {signup && <PolicyAgreement id="google-policy-agreement" checked={accepted} onChange={setAccepted} disabled={busy} />}
       <AuthError error={error} id="google-dialog-error" />
       <div className="tm-google-dialog-actions">
         <button type="button" className="tm-google-cancel" data-cancel onClick={onCancel} disabled={busy}>Not now</button>
-        <button className="tm-auth-submit" type="submit" disabled={busy || (signup && !availability.available)}>
+        <button className="tm-auth-submit" type="submit" disabled={busy || (signup && (!availability.available || !accepted))}>
           {busy ? "Signing in…" : signup ? "Create account" : "Link & sign in"}
           {!busy && <FiArrowRight aria-hidden="true" />}
         </button>

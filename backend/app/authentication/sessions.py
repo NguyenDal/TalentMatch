@@ -15,6 +15,7 @@ from app.infrastructure.database import get_db
 from app.models import GoogleIdentity, LoginEvent, User, UserSession
 
 ALGORITHM = "HS256"
+POLICY_VERSION = "2026-11-23"
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]{3,30}$")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -63,6 +64,12 @@ def require_username(db, username):
     if not status["available"]:
         raise HTTPException(status_code=409, detail=status["message"])
     return username.strip()
+
+
+def require_policy_version(accepted_version):
+    if accepted_version != POLICY_VERSION:
+        raise HTTPException(422, "Agree to the current Privacy Policy and Terms and Conditions before creating an account.")
+    return POLICY_VERSION
 
 
 def validate_password(password):

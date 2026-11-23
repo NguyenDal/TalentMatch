@@ -78,7 +78,7 @@ class AuthRouteLimitTests(unittest.TestCase):
 
     def test_registration_login_and_google_start_share_a_source_budget(self):
         registration = self.client.post("/register/", data={
-            "username": "new_user", "email": "new@example.com", "password": "fixture-password",
+            "username": "new_user", "email": "new@example.com", "password": "fixture-password", **auth_tests.AGREEMENT,
         })
         self.assertEqual(registration.status_code, 200)
         with patch("app.main.geo_lookup", AsyncMock(return_value="Test location")):
@@ -87,7 +87,7 @@ class AuthRouteLimitTests(unittest.TestCase):
         google_start = self.client.get("/auth/google/start/", follow_redirects=False)
         self.assertEqual(google_start.status_code, 302)
         blocked = self.client.post("/register/", data={
-            "username": "other_user", "email": "other@example.com", "password": "fixture-password",
+            "username": "other_user", "email": "other@example.com", "password": "fixture-password", **auth_tests.AGREEMENT,
         })
         self.assertEqual(blocked.status_code, 429)
         self.assertEqual(blocked.headers["Retry-After"], "60")

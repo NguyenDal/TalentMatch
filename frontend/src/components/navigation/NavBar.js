@@ -1,11 +1,12 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import axios from "axios";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { FiArrowUpRight, FiSearch, FiLayers, FiLogOut, FiSettings, FiTarget, FiFileText, FiMail, FiMessageCircle } from "react-icons/fi";
+import { FiArrowUpRight, FiSearch, FiLogOut, FiSettings, FiTarget, FiFileText, FiMail, FiMessageCircle } from "react-icons/fi";
 import { workspaceTools } from "../../app/workspaceRoutes";
 import { useAuth } from "../../contexts/AuthContext";
 import { BASE_URL } from "../../services/api";
 import ThemeToggle from "../theme/ThemeToggle";
+import BrandMark from "./BrandMark";
 import "./NavBar.css";
 
 const icons = { "/jobs": FiSearch, "/job-fit": FiTarget, "/resume-builder": FiFileText, "/cover-letter": FiMail, "/application-questions": FiMessageCircle };
@@ -89,7 +90,7 @@ export default function NavBar() {
     <header className="tm-app-nav">
       <div className="tm-app-nav-inner">
         <Link to="/jobs" className="tm-app-brand" aria-label="TalentMatch home">
-          <span className="tm-app-brand-mark" aria-hidden="true"><FiLayers /></span>
+          <BrandMark className="tm-app-brand-mark" />
           <span>TalentMatch<span className="tm-app-brand-dot">.</span></span>
         </Link>
 

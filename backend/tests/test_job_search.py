@@ -87,6 +87,9 @@ class JobSearchTests(unittest.TestCase):
         with patch.object(job_search, "public_json", return_value={"id": 1, "content": content}) as fetch:
             result = self.client.get("/job-search/d2l/1/")
             self.assertEqual(result.json()["description"], "About the role\nBuild R&D software.")
+            self.assertEqual(result.json()["description_sections"], [
+                {"title": "About the role", "blocks": [{"type": "paragraph", "text": "Build R&D software."}]},
+            ])
             fetch.assert_called_once_with(f"{greenhouse.API}/d2l/jobs/1", greenhouse.DETAIL_BYTES)
             self.assertEqual(self.client.get("/job-search/not-a-board/1/").status_code, 404)
             self.assertEqual(self.client.get("/job-search/d2l/0/").status_code, 404)
@@ -106,6 +109,18 @@ class JobSearchTests(unittest.TestCase):
 
 
 class PublicBoardAdapterTests(unittest.TestCase):
+    def test_description_sections_keep_employer_lists_and_standalone_bold_headings(self):
+        content = ("<p>Join <b>our team</b>.</p><p><strong>What you'll do</strong></p>"
+                   "<ul><li><p>Plan and<br>ship.</p></li><li>Review feedback.</li></ul>"
+                   "<h3>Interview process</h3><ol><li>Apply</li><li>Meet the team</li></ol>"
+                   "<script>ignored</script>")
+        sections = greenhouse.description_sections(greenhouse.description_blocks(content))
+        self.assertEqual(sections, [
+            {"title": "", "blocks": [{"type": "paragraph", "text": "Join our team."}]},
+            {"title": "What you'll do", "blocks": [{"type": "ul", "items": ["Plan and ship.", "Review feedback."]}]},
+            {"title": "Interview process", "blocks": [{"type": "ol", "items": ["Apply", "Meet the team"]}]},
+        ])
+
     def test_cache_single_flight_and_stale_expiry(self):
         tick = [1000]
         calls = []

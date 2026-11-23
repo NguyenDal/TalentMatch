@@ -26,8 +26,6 @@
 .dark .tm-app-nav { background: var(--tm-dark-chrome); }
 .tm-app-nav-inner { width: 100%; min-height: 84px; padding: 0 40px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 28px; }
 .tm-app-brand { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; color: var(--tm-app-ink); text-decoration: none; font-size: 22px; font-weight: 750; letter-spacing: -.9px; }
-.tm-app-brand-mark { width: 35px; height: 35px; display: grid; place-items: center; border-radius: 11px; background: #7152e8; color: white; font-size: 21px; }
-.dark .tm-app-brand-mark { background: var(--tm-dark-primary); color: var(--tm-dark-primary-ink); }
 .tm-app-brand-dot { color: var(--tm-app-accent); }
 .tm-app-links { display: flex; align-items: center; gap: 8px; }
 .tm-app-link { display: inline-flex; align-items: center; gap: 8px; padding: 11px 15px; border-radius: 8px; color: var(--tm-app-muted); text-decoration: none; font-size: 12px; font-weight: 600; white-space: nowrap; transition: color 160ms ease, background 160ms ease; }
@@ -68,7 +66,7 @@
 @media (max-width: 1060px) {
   .tm-app-nav-inner { flex-wrap: wrap; min-height: 116px; padding: 16px 20px 10px; gap: 12px; }
   .tm-app-brand { font-size: 21px; }
-  .tm-app-brand-mark { width: 33px; height: 33px; font-size: 20px; }
+  .tm-app-brand-mark { width: 33px; height: 33px; }
   .tm-app-links { order: 3; width: 100%; justify-content: flex-start; gap: 5px; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--tm-app-border) transparent; padding: 4px 0; }
   .tm-app-link { justify-content: center; flex: 1 0 auto; padding: 10px 12px; }
   .tm-app-nav-actions { gap: 9px; }

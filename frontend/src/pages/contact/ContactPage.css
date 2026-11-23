@@ -76,6 +76,8 @@
 .tm-contact-channel-action svg { font-size: 17px; }
 
 .dark .tm-contact {
+  --tm-ink: var(--tm-dark-ink);
+  --tm-muted: var(--tm-dark-muted);
   --contact-accent: var(--tm-dark-accent);
   --contact-accent-text: var(--tm-dark-accent);
   --contact-border: var(--tm-dark-border);

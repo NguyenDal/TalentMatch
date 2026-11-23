@@ -1,8 +1,9 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { FiArrowUpRight, FiLayers, FiMenu, FiX } from "react-icons/fi";
+import { FiArrowUpRight, FiMenu, FiX } from "react-icons/fi";
 import "./PublicNavBar.css";
 import ThemeToggle from "../theme/ThemeToggle";
+import BrandMark from "./BrandMark";
 
 function scrollToSteps() {
   const target = document.getElementById("how-it-works");
@@ -44,7 +45,7 @@ export default function PublicNavBar({ variant = "contrast" }) {
     >
       <div className="tm-nav__inner">
         <Link to="/" className="tm-nav__brand" aria-label="TalentMatch home" onClick={closeMenu}>
-          <span className="tm-nav__brand-mark" aria-hidden="true"><FiLayers /></span>
+          <BrandMark className="tm-nav__brand-mark" />
           <span>TalentMatch<span className="tm-nav__brand-dot">.</span></span>
         </Link>
 

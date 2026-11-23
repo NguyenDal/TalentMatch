@@ -1,7 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { FiArrowLeft, FiFileText, FiTarget, FiTrendingUp } from "react-icons/fi";
-import PublicFooter from "../navigation/PublicFooter";
 import "./AuthPages.css";
 
 const steps = [
@@ -12,7 +11,6 @@ const steps = [
 
 export default function AuthLayout({ mode, title, subtitle, children }) {
   return (
-    <>
       <main className={`tm-auth tm-auth--${mode}`}>
         <div className="tm-container tm-auth-grid">
           <aside className="tm-auth-story" aria-label="Your next chapter with TalentMatch">
@@ -43,7 +41,5 @@ export default function AuthLayout({ mode, title, subtitle, children }) {
           </section>
         </div>
       </main>
-      <PublicFooter />
-    </>
   );
 }

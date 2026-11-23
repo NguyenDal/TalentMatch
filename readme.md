@@ -201,8 +201,14 @@ when intentionally hosting the API elsewhere. Prefer frontend and API on the
 same origin. If they are on different sites, set
 `GOOGLE_COOKIE_SAMESITE=none` with an HTTPS callback; browsers that block third-party
 cookies may still prevent completion, so a same-site API/reverse proxy is preferable.
-Use Google's Audience settings to manage test access and complete branding
-requirements before publishing the OAuth app for general use.
+In Google Auth Platform, set **Branding → App name** to **TalentMatch** for the
+project that owns `GOOGLE_CLIENT_ID`. Google controls the name shown in its
+account chooser. For external production use, configure the public homepage,
+privacy policy and terms URLs, link the privacy policy from the homepage, and
+verify domain ownership. Use **Verify Branding**, then **Publish branding** once
+Google approves it. Until the brand is published, Google can show the callback
+domain. Manage test access separately under **Audience**.
+[Google OAuth branding requirements](https://support.google.com/cloud/answer/15549049?hl=en)
 
 Auth regression checks:
 
@@ -260,6 +266,12 @@ excludes developer `.env` files, local dependencies, and build artifacts.
 The app does not migrate or initialize the database at startup: verify the
 existing Neon schema before deployment; use a direct Neon connection for any
 separately reviewed migration.
+
+Before deploying Applied jobs and signup agreements to an existing TalentMatch database, run
+`python -m app.init_db` from `backend` with the target database connection.
+This creates the missing `applied_jobs` and `policy_acceptances` tables. Each new
+account records the Terms and Conditions and Privacy Policy version and the
+time of acceptance. Existing users keep their sign-in flow and account history.
 
 Use `/healthz` as Render's health-check path. It does not call OpenAI or wake
 Neon. Supported React deep links serve the SPA; API errors remain API errors.

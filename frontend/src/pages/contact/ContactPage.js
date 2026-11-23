@@ -3,7 +3,6 @@ import {
   FiArrowRight, FiArrowUpRight, FiCalendar, FiCode, FiCpu, FiFileText,
   FiGrid, FiLayers, FiMail, FiMessageCircle,
 } from "react-icons/fi";
-import PublicFooter from "../../components/navigation/PublicFooter";
 import portrait from "../../assets/nguyen-dal-480.webp";
 import portraitRetina from "../../assets/nguyen-dal-960.webp";
 import "./ContactPage.css";
@@ -62,7 +61,6 @@ export default function ContactPage() {
   ];
 
   return (
-    <>
       <main className="tm-contact" id="main-content">
         <section className="tm-contact-hero" aria-labelledby="contact-title">
           <div className="tm-contact-container tm-contact-hero-grid">
@@ -155,7 +153,5 @@ export default function ContactPage() {
           </div>
         </section>
       </main>
-      <PublicFooter />
-    </>
   );
 }

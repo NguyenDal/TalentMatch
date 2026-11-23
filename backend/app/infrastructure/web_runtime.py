@@ -11,7 +11,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 MAX_UPLOAD_BODY = 6 * 1024 * 1024
 PUBLIC_ROUTES = {
-    "", "login", "signup", "contact", "request-password-reset", "reset-password", "dashboard",
+    "", "login", "signup", "contact", "privacy", "terms", "request-password-reset", "reset-password", "dashboard",
     "resume-builder", "cover-letter", "application-questions", "jobs", "job-fit",
 }
 UPLOAD_ERROR_DETAILS = {

@@ -30,6 +30,11 @@
 .tm-auth-heading h1 { font-size: 35px; font-weight: 700; line-height: 1.2; letter-spacing: -1.3px; margin: 13px 0 12px; }
 .tm-auth-heading p { color: var(--auth-muted); font-size: 13px; line-height: 1.8; margin: 0; }
 .tm-auth-form { display: flex; flex-direction: column; gap: 20px; }
+.tm-policy-agreement { display: flex; align-items: flex-start; gap: 9px; color: var(--auth-text); font-size: 12px; line-height: 1.65; }
+.tm-policy-agreement input { width: 16px; height: 16px; flex: 0 0 16px; margin: 2px 0 0; accent-color: var(--auth-accent); cursor: pointer; }
+.tm-policy-agreement label { cursor: pointer; }
+.tm-policy-required { color: var(--auth-accent); font-weight: 700; }
+.tm-policy-agreement a { color: var(--auth-accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .tm-auth-field { min-width: 0; }
 .tm-auth-field > label { display: block; margin-bottom: 8px; color: var(--auth-text); font-weight: 600; font-size: 12px; }
 .tm-auth-input-wrap { display: flex; align-items: center; background: var(--auth-surface); border: 1px solid var(--auth-border); border-radius: 8px; padding: 0 13px; min-height: 50px; transition: border-color 160ms ease, box-shadow 160ms ease; }

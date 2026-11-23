@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Index, func
+from sqlalchemy import BigInteger, Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Index, func
 from app.infrastructure.database import Base
 from datetime import datetime, timedelta
 import hashlib
@@ -59,6 +59,26 @@ class User(Base):
         )
         self.email_verified = False
         return code
+
+class PolicyAcceptance(Base):
+    __tablename__ = "policy_acceptances"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    version = Column(String(10), nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class AppliedJob(Base):
+    __tablename__ = "applied_jobs"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    board = Column(String(40), primary_key=True)
+    job_id = Column(BigInteger, primary_key=True)
+    title = Column(String(1024), nullable=False)
+    location = Column(String(1024), nullable=False)
+    url = Column(Text, nullable=False)
+    applied_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
 
 class LoginEvent(Base):
     __tablename__ = "login_events"

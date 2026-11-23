@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import axios from "axios";
 import App from "../../app/App";
 
@@ -21,7 +21,7 @@ beforeEach(() => {
   mockUser = null;
   localStorage.clear();
   sessionStorage.clear();
-  axios.get.mockResolvedValue({ data: { enabled: true } });
+  axios.get.mockImplementation(url => Promise.resolve({ data: url.endsWith("/applied-jobs/") ? { jobs: [] } : { enabled: true } }));
   axios.post.mockResolvedValue({ data: { jobs: [], unavailable_boards: [], stale_boards: [] } });
   jest.spyOn(window, "scrollTo").mockImplementation(() => {});
 });
@@ -57,6 +57,18 @@ test("a direct contact visit loads its route while keeping public navigation ava
   expect(window.location.pathname).toBe("/contact");
 });
 
+test.each([false, true])("both policies open directly and from the shared footer (signed in: %s)", async signedIn => {
+  mockUser = signedIn ? { username: "Starlight", token: "test-token" } : null;
+  window.history.replaceState({}, "", "/privacy");
+  render(<App />);
+  expect(await screen.findByRole("heading", { level: 1, name: /privacy policy/i })).toBeVisible();
+  const footer = within(screen.getByRole("navigation", { name: "Footer" }));
+  expect(footer.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
+  fireEvent.click(footer.getByRole("link", { name: "Terms and Conditions" }));
+  expect(await screen.findByRole("heading", { level: 1, name: /terms and conditions/i })).toBeVisible();
+  expect(window.location.pathname).toBe("/terms");
+});
+
 test("a signed-in visit loads the separate workspace shell and account navigation", async () => {
   mockUser = { username: "Starlight", token: "test-token" };
   window.history.replaceState({}, "", "/");
@@ -74,11 +86,11 @@ test("an old dashboard link opens job search and passes a selected posting to th
   axios.post.mockResolvedValue({ data: { jobs: [
     { id: 42, board: "mozilla", company: "Mozilla", title: "Data analyst", location: "Remote Canada", url: "https://example.org/careers/42", matched_terms: [] },
   ] } });
-  axios.get.mockImplementation(url => Promise.resolve({ data: url.endsWith("/42/") ? { description: "Build reports with SQL." } : {} }));
+  axios.get.mockImplementation(url => Promise.resolve({ data: url.endsWith("/42/") ? { description: "Build reports with SQL." } : { jobs: [] } }));
   window.history.replaceState({}, "", "/dashboard");
   render(<App />);
   fireEvent.click(await screen.findByRole("button", { name: /Mozilla Data analyst/ }));
-  expect(await screen.findByRole("link", { name: "Employer posting" })).toBeVisible();
+  expect(await screen.findByRole("link", { name: "Apply" })).toBeVisible();
   fireEvent.click(await screen.findByRole("button", { name: "Check job fit" }));
   expect(await screen.findByRole("textbox", { name: "Job description" })).toHaveValue("Data analyst — Mozilla\n\nRemote Canada\n\nBuild reports with SQL.");
   fireEvent.change(screen.getByLabelText("Upload your resume"), { target: { files: [new File(["SQL reporting"], "analyst.txt")] } });

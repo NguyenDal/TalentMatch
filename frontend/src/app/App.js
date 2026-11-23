@@ -1,11 +1,13 @@
 import React, { lazy, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import PublicNavBar from "../components/navigation/PublicNavBar";
+import PublicFooter from "../components/navigation/PublicFooter";
 import HomeIntro from "../pages/home/HomeIntro";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import RouteContent from "./RouteContent";
 import { workspaceTools } from "./workspaceRoutes";
+import { publicInfoRoutes } from "./publicInfoRoutes";
 
 // Keep the landing page available immediately; fetch other screens on demand.
 const AuthenticatedApp = lazy(() => import("./AuthenticatedApp"));
@@ -13,7 +15,6 @@ const Signup = lazy(() => import("../pages/auth/Signup"));
 const Login = lazy(() => import("../pages/auth/Login"));
 const ResetPassword = lazy(() => import("../pages/auth/ResetPassword"));
 const RequestPasswordReset = lazy(() => import("../pages/auth/RequestPasswordReset"));
-const ContactPage = lazy(() => import("../pages/contact/ContactPage"));
 
 function RouteScrollReset() {
   const { pathname, hash } = useLocation();
@@ -30,6 +31,7 @@ function PublicLayout({ children, landing = false }) {
       <div className="tm-public-page">
         <PublicNavBar variant="landing" />
         <RouteContent>{children}</RouteContent>
+        <PublicFooter />
       </div>
     );
   }
@@ -40,6 +42,7 @@ function PublicLayout({ children, landing = false }) {
       <div className="w-full flex-1 flex items-center justify-center">
         <RouteContent>{children}</RouteContent>
       </div>
+      <PublicFooter />
     </div>
   );
 }
@@ -106,14 +109,7 @@ const App = () => {
           </PublicLayout>
         }
       />
-      <Route
-        path="/contact"
-        element={
-          <PublicLayout landing>
-            <ContactPage />
-          </PublicLayout>
-        }
-      />
+      <Route element={<PublicLayout landing><Outlet /></PublicLayout>}>{publicInfoRoutes}</Route>
       {/* Any unknown public route → home intro */}
       {workspaceTools.map(({ path }) => <Route key={path} path={path} element={<PublicLayout landing><Login /></PublicLayout>} />)}
       <Route path="*" element={<Navigate to="/" replace />} />

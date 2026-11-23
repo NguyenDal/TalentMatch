@@ -7,19 +7,21 @@ import AuthLayout from "../../components/auth/AuthLayout";
 import AuthField, { AuthError } from "../../components/auth/AuthField";
 import GoogleAuth from "../../components/auth/GoogleAuth";
 import UsernameField from "../../components/auth/UsernameField";
+import PolicyAgreement, { POLICY_VERSION } from "../../components/auth/PolicyAgreement";
 import useUsernameAvailability from "../../hooks/useUsernameAvailability";
 
 export default function Signup({ onLogin }) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const availability = useUsernameAvailability(username);
 
   const handleSignup = async (event) => {
     event.preventDefault();
-    if (!availability.available || loading) return;
+    if (!availability.available || !accepted || loading) return;
     setErr("");
     setLoading(true);
     try {
@@ -27,6 +29,7 @@ export default function Signup({ onLogin }) {
       params.append("username", username);
       params.append("email", email);
       params.append("password", password);
+      params.append("accepted_policy_version", POLICY_VERSION);
 
       await axios.post(BASE_URL + "/register/", params, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -98,8 +101,9 @@ export default function Signup({ onLogin }) {
           disabled={loading}
           required
         />
+        <PolicyAgreement id="signup-policy-agreement" checked={accepted} onChange={setAccepted} disabled={loading} />
         <AuthError error={err} />
-        <button className="tm-auth-submit" type="submit" disabled={loading || !availability.available}>
+        <button className="tm-auth-submit" type="submit" disabled={loading || !availability.available || !accepted}>
           {loading ? "Creating your account..." : "Create account"}
           {!loading && <FiArrowRight aria-hidden="true" />}
         </button>

@@ -43,20 +43,10 @@
   letter-spacing: -0.9px;
 }
 
-.tm-nav__brand-mark {
-  display: grid;
-  place-items: center;
-  width: 35px;
-  height: 35px;
-  border-radius: 11px;
+:root:not(.dark) .tm-nav--contrast .tm-nav__brand-mark {
+  border-radius: 8px;
+  padding: 2px;
   background: #fff;
-  color: #7152e8;
-  font-size: 21px;
-}
-
-.tm-nav--landing .tm-nav__brand-mark {
-  background: #7152e8;
-  color: #fff;
 }
 
 .tm-nav--landing .tm-nav__brand-dot {
@@ -166,7 +156,6 @@
 .dark .tm-nav .tm-nav__link.active,
 .dark .tm-nav--landing .tm-nav__link:hover { color: var(--tm-dark-accent); }
 
-.dark .tm-nav .tm-nav__brand-mark,
 .dark .tm-nav .tm-nav__login-button { background: var(--tm-dark-primary); color: var(--tm-dark-primary-ink); }
 .dark .tm-nav .tm-nav__login-button:hover { background: var(--tm-dark-primary-hover); box-shadow: none; }
 

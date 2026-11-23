@@ -1,9 +1,11 @@
 import React, { lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import NavBar from "../components/navigation/NavBar";
+import PublicFooter from "../components/navigation/PublicFooter";
 import { ApplicationMaterialsProvider } from "../contexts/ApplicationMaterials";
 import RouteContent from "./RouteContent";
 import { workspaceTools } from "./workspaceRoutes";
+import { publicInfoRoutes } from "./publicInfoRoutes";
 
 const JobSearch = lazy(() => import("../pages/jobs/JobSearch"));
 const ResumeMatcher = lazy(() => import("../pages/matching/ResumeMatcher"));
@@ -16,6 +18,7 @@ export default function AuthenticatedApp() {
       <NavBar />
       <RouteContent>
         <Routes>
+          {publicInfoRoutes}
           <Route path="/jobs" element={<JobSearch />} />
           <Route path="/job-fit" element={<ResumeMatcher />} />
           {workspaceTools.filter(item => item.tool).map(({ path, tool }) =>
@@ -25,6 +28,7 @@ export default function AuthenticatedApp() {
           <Route path="*" element={<Navigate to="/jobs" replace />} />
         </Routes>
       </RouteContent>
+      <PublicFooter />
     </div>
   </ApplicationMaterialsProvider>;
 }

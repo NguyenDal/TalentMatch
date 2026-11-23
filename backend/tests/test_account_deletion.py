@@ -8,6 +8,7 @@ from sqlalchemy import event
 from sqlalchemy.exc import SQLAlchemyError
 
 import test_google_auth as auth_tests
+from app.models import AppliedJob, PolicyAcceptance
 
 
 class AccountDeletionTests(unittest.TestCase):
@@ -24,6 +25,9 @@ class AccountDeletionTests(unittest.TestCase):
         self.other = self.local_user(username="RemainingUser", email="keep@example.com")
         with self.sessions() as db:
             for user_id in (self.owner, self.other):
+                db.add(PolicyAcceptance(user_id=user_id, version=auth_tests.POLICY_VERSION))
+                db.add(AppliedJob(user_id=user_id, board="affirm", job_id=8201471003, title="Engineer",
+                                  location="Canada", url="https://affirm.com/jobs/"))
                 db.add(auth_tests.GoogleIdentity(user_id=user_id, subject=f"google-{user_id}"))
                 db.add(auth_tests.GoogleAuthTicket(
                     token_hash=f"ticket-{user_id}", browser_hash="browser", kind="link",
@@ -49,6 +53,8 @@ class AccountDeletionTests(unittest.TestCase):
         with self.sessions() as db:
             self.assertEqual(db.get(auth_tests.User, user_id) is not None, present)
             for model, column, count in (
+                (AppliedJob, AppliedJob.user_id, 1),
+                (PolicyAcceptance, PolicyAcceptance.user_id, 1),
                 (auth_tests.UserSession, auth_tests.UserSession.user_id, 2),
                 (auth_tests.LoginEvent, auth_tests.LoginEvent.user_id, 2),
                 (auth_tests.GoogleIdentity, auth_tests.GoogleIdentity.user_id, 1),
